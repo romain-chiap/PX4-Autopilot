@@ -104,10 +104,18 @@ px4_add_module(
 	SRCS
 		${srcs}
 	DEPENDS
+		controllib
 		git_ecl
 		ecl_geo_lookup # TODO: move this
 		output_limit
 		version
+
+		CMSISDSP
+		CMSISDSPBasicMath
+		CMSISDSPFastMath
+		CMSISDSPSupport
+		CMSISDSPTransform
+		CMSISDSPCommon
 	)
 
 add_subdirectory(hrt_test)

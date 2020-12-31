@@ -219,6 +219,13 @@ else()
 	SET(BUILD_SHARED_LIBS OFF)
 endif()
 
+
+# CMSIS hacks
+add_subdirectory(external/cmsis)
+include_directories(${CMSIS_ROOT}/CMSIS/Core/Include)
+include_directories(${CMSIS_ROOT}/CMSIS/DSP/Include)
+message(STATUS "CMSIS_ROOT: ${CMSIS_ROOT}")
+message(STATUS "CMSIS_DSP: ${CMSIS_DSP}")
 #=============================================================================
 
 # gold linker - use if available (posix only for now)
