@@ -38,6 +38,7 @@ px4_add_module(
 	COMPILE_FLAGS
 	SRCS
 		sih.cpp
+		aero.hpp
 	DEPENDS
 		mathlib
 		drivers_accelerometer

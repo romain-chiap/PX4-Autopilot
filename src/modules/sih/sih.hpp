@@ -129,6 +129,8 @@ private:
 	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
 	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
 	static constexpr hrt_abstime LOOP_INTERVAL = 4000;      // 4ms => 250 Hz real-time
+	static constexpr float SPAN=0.86f; 	// wing span [m]
+	static constexpr float MAC=0.21f; 	// wing mean aerodynamic chord [m]
 
 	void init_variables();
 	void init_sensors();
@@ -140,6 +142,8 @@ private:
 	void send_gps();
 	void publish_sih();
 	void inner_loop();
+	matrix::Vector3f flap_moments();
+	matrix::Quatf expq(matrix::Vector3f u);
 
 	perf_counter_t  _loop_perf;
 	perf_counter_t  _sampling_perf;
@@ -169,6 +173,14 @@ private:
 	matrix::Quatf       _q_dot;         // quaternion differential
 	matrix::Vector3f    _w_B_dot;       // body rates differential
 	float       _u[NB_MOTORS];  // thruster signals
+
+	enum Vtype {MC, FW}; 	// vehicle type
+	Vtype _vehicle=MC;
+
+	// aerodynamic segments for the fixedwing
+	AeroSeg wing=AeroSeg(SPAN, MAC, math::radians(-4.0f), matrix::Vector3f());
+	AeroSeg tailplane=AeroSeg(0.3, 0.1, 0.0f, matrix::Vector3f(-0.4f, 0.0f, 0.0f));
+	AeroSeg fin=AeroSeg(0.25, 0.15, 0.0f, matrix::Vector3f(-0.4f, 0.0f, -0.1f), false);
 
 
 	// sensors reconstruction
@@ -210,6 +222,7 @@ private:
 		(ParamFloat<px4::params::SIH_LOC_H0>) _sih_h0,
 		(ParamFloat<px4::params::SIH_LOC_MU_X>) _sih_mu_x,
 		(ParamFloat<px4::params::SIH_LOC_MU_Y>) _sih_mu_y,
-		(ParamFloat<px4::params::SIH_LOC_MU_Z>) _sih_mu_z
+		(ParamFloat<px4::params::SIH_LOC_MU_Z>) _sih_mu_z,
+		(ParamInt<px4::params::SIH_VEHICLE_TYPE>) _sih_vtype
 	)
 };

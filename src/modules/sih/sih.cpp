@@ -40,6 +40,7 @@
  * Coriolis g Corporation - January 2019
  */
 
+#include "aero.hpp"
 #include "sih.hpp"
 
 #include <px4_getopt.h>
@@ -57,11 +58,6 @@
 using namespace math;
 using namespace matrix;
 
-int Sih::print_status()
-{
-	PX4_INFO("Running");
-	return 0;
-}
 
 int Sih::custom_command(int argc, char *argv[])
 {
@@ -102,6 +98,7 @@ Sih::Sih() :
 	_loop_perf(perf_alloc(PC_ELAPSED, "sih_execution")),
 	_sampling_perf(perf_alloc(PC_ELAPSED, "sih_sampling"))
 {
+	_vehicle=(Vtype)constrain(_sih_vtype.get(),0,1);
 }
 
 void Sih::run()
@@ -260,12 +257,16 @@ void Sih::read_motors()
 	// read the actuator outputs
 	bool updated = false;
 	orb_check(_actuator_out_sub, &updated);
-
+	float pwm_middle=0.5f*(PWM_DEFAULT_MIN+PWM_DEFAULT_MAX);
 	if (updated) {
 		orb_copy(ORB_ID(actuator_outputs), _actuator_out_sub, &actuators_out);
 
 		for (int i = 0; i < NB_MOTORS; i++) { // saturate the motor signals
-			_u[i] = constrain((actuators_out.output[i] - PWM_DEFAULT_MIN) / (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN), 0.0f, 1.0f);
+			if (_vehicle==Vtype::FW && i<3) { // control surfaces in range [-1,1]
+				_u[i] = constrain(2.0f*(actuators_out.output[i] - pwm_middle) / (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN), -1.0f, 1.0f);
+			} else { // throttle signals in range [0,1]
+				_u[i] = constrain((actuators_out.output[i] - PWM_DEFAULT_MIN) / (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN), 0.0f, 1.0f);
+			}			
 		}
 	}
 }
@@ -273,13 +274,39 @@ void Sih::read_motors()
 // generate the motors thrust and torque in the body frame
 void Sih::generate_force_and_torques()
 {
-	_T_B = Vector3f(0.0f, 0.0f, -_T_MAX * (+_u[0] + _u[1] + _u[2] + _u[3]));
-	_Mt_B = Vector3f(_L_ROLL * _T_MAX * (-_u[0] + _u[1] + _u[2] - _u[3]),
-			 _L_PITCH * _T_MAX * (+_u[0] - _u[1] + _u[2] - _u[3]),
-			 _Q_MAX * (+_u[0] + _u[1] - _u[2] - _u[3]));
+	if (_vehicle==Vtype::MC) {
+		_T_B = Vector3f(0.0f, 0.0f, -_T_MAX * (+_u[0] + _u[1] + _u[2] + _u[3]));
+		_Mt_B = Vector3f(_L_ROLL * _T_MAX * (-_u[0] + _u[1] + _u[2] - _u[3]),
+				 _L_PITCH * _T_MAX * (+_u[0] - _u[1] + _u[2] - _u[3]),
+				 _Q_MAX * (+_u[0] + _u[1] - _u[2] - _u[3]));
 
-	_Fa_I = -_KDV * _v_I;   // first order drag to slow down the aircraft
-	_Ma_B = -_KDW * _w_B;   // first order angular damper
+		_Fa_I = -_KDV * _v_I;   // first order drag to slow down the aircraft
+		_Ma_B = -_KDW * _w_B;   // first order angular damper
+	} else { // fixed wing
+		_T_B = Vector3f(_T_MAX*_u[3],0.0f,0.0f); 	// forward thruster
+		// _Mt_B = Vector3f(_Q_MAX*_u[3], 0.0f,0.0f); 	// thruster torque
+		_Mt_B = Vector3f();
+
+		// aerodynamics
+		_v_B = _C_IB.transpose() * _v_I; 	// velocity in body frame [m/s]
+		wing.update_aero(_v_B, _w_B, _dt);
+		tailplane.update_aero(_v_B, _w_B, _dt);
+		fin.update_aero(_v_B, _w_B, _dt);
+		_Fa_I = _C_IB*(wing.Fa+tailplane.Fa+fin.Fa) -_KDV * _v_I; 	// sum of aerodynamic forces
+		_Ma_B = wing.Ma + tailplane.Ma + fin.Ma + flap_moments() -_KDW * _w_B; 	// aerodynamic moments
+
+	} 
+}
+
+Vector3f Sih::flap_moments()
+{
+	// control derivative coefficients from Levin thesis
+	const float flap_max=10.0f;	// maximum flap deflection (deg)
+	const float clda=0.000678f, cldr=-0.0000931f, cmde=-0.0118f, cndr=0.00357f; // 1/deg
+	float v2=_v_B.length()*_v_B.length();	// vel squared
+	return 0.5f*AeroSeg::RHO*v2*SPAN*MAC*flap_max*Vector3f(	SPAN*(clda*_u[0]+cldr*_u[2]),
+													MAC*cmde*_u[1],
+													SPAN*cndr*_u[2]);
 }
 
 // apply the equations of motion of a rigid body and integrate one step
@@ -290,28 +317,45 @@ void Sih::equations_of_motion()
 	// Equations of motion of a rigid body
 	_p_I_dot = _v_I;                        // position differential
 	_v_I_dot = (_W_I + _Fa_I + _C_IB * _T_B) / _MASS;   // conservation of linear momentum
-	_q_dot = _q.derivative1(_w_B);              // attitude differential
+	_q_dot = expq(0.5f*_dt*_w_B);              // attitude differential
 	_w_B_dot = _Im1 * (_Mt_B + _Ma_B - _w_B.cross(_I * _w_B)); // conservation of angular momentum
 
 	// fake ground, avoid free fall
 	if (_p_I(2) > 0.0f && (_v_I_dot(2) > 0.0f || _v_I(2) > 0.0f)) {
-		if (!_grounded) {    // if we just hit the floor
-			// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
-			_v_I_dot = -_v_I / _dt;
-
-		} else {
-			_v_I_dot.setZero();
+		if (_vehicle==Vtype::MC) {
+			if (!_grounded) {    // if we just hit the floor
+				// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
+				_v_I_dot = -_v_I / _dt;
+			} else {
+				_v_I_dot.setZero();
+			}
+			_v_I.setZero();
+			_w_B.setZero();
+			_grounded = true;
+		} else if (_vehicle==Vtype::FW) {
+			if (!_grounded) {    // if we just hit the floor
+				// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
+				_v_I_dot(2) = -_v_I(2) / _dt;
+			} else {
+				// we only allow negative acceleration in order to takeoff
+				_v_I_dot(2)=fminf(_v_I_dot(2), 0.0f);
+			}
+			// integration: Euler forward
+			_p_I = _p_I + _p_I_dot * _dt;
+			_v_I = _v_I + _v_I_dot * _dt;
+			Eulerf RPY=Eulerf(_q);
+			RPY(0)=0.0f;	// no roll
+			RPY(1)=radians(5.0f); 	// pitch slightly up to get some lift
+			_q=Quatf(RPY);
+			_w_B.setZero();
+			_grounded = true;
 		}
-
-		_v_I.setZero();
-		_w_B.setZero();
-		_grounded = true;
 
 	} else {
 		// integration: Euler forward
 		_p_I = _p_I + _p_I_dot * _dt;
 		_v_I = _v_I + _v_I_dot * _dt;
-		_q = _q + _q_dot * _dt; // as given in attitude_estimator_q_main.cpp
+		_q = _q*_q_dot;
 		_q.normalize();
 		_w_B = _w_B + _w_B_dot * _dt;
 		_grounded = false;
@@ -451,6 +495,37 @@ void Sih::publish_sih()
 	}
 }
 
+/**
+ * Computes the quaternion exponential of the 3D vector u
+ * return a quaternion computed as
+ * expq(u)=[cos||u||, sinc||u||*u
+ * sinc(x)=sin(x)/x in the sin cardinal function
+ *
+ * This can be used to update a quaternion from the body rates
+ * rather than using
+ * qk+1=qk+qk.derivative1(wb)*dt
+ * we can use
+ * qk+1=qk*expq(dt*wb/2)
+ * which is a more robust update.
+ * A re-normalization is necessary after the first method, but not the second.
+ *
+ * @param w angular rate in frame 2 (typically reference frame)
+ */
+Quatf Sih::expq(Vector3f u)
+{
+	const float tol=1.0e-6f;
+    float u_norm=u.norm();
+    float sinc;
+
+    if (u_norm>-tol && u_norm<tol) {
+        sinc = 1.0f-u_norm*u_norm/6.0f; // this ensure an error smaller than tol^3
+    } else {
+        sinc = sinf(u_norm)/u_norm;
+    }
+    Vector3f v=sinc*u;
+    return Quatf(cosf(u_norm), v(0),v(1),v(2));
+}
+
 float Sih::generate_wgn()   // generate white Gaussian noise sample with std=1
 {
 	// algorithm 1:
@@ -484,6 +559,35 @@ float Sih::generate_wgn()   // generate white Gaussian noise sample with std=1
 Vector3f Sih::noiseGauss3f(float stdx, float stdy, float stdz)
 {
 	return Vector3f(generate_wgn() * stdx, generate_wgn() * stdy, generate_wgn() * stdz);
+}
+
+int Sih::print_status()
+{
+	if (_vehicle==Vtype::MC) {
+		PX4_INFO("Running MC");
+	} else {
+		PX4_INFO("Running FW");
+	}
+        PX4_INFO("vehicle landed: %d",_grounded);
+	PX4_INFO("dt [us]: %d",(int)(_dt*1e6f));
+        PX4_INFO("inertial position NED (m)");
+        _p_I.print();
+        PX4_INFO("inertial velocity NED (m/s)");
+        _v_I.print();
+        PX4_INFO("attitude roll-pitch-yaw (deg)");
+        (Eulerf(_q)*180.0f/M_PI_F).print();
+        PX4_INFO("angular acceleration roll-pitch-yaw (deg/s)");
+        (_w_B*180.0f/M_PI_F).print();
+	PX4_INFO("actuator signals");
+	Vector<float, 8> u = Vector<float, 8>(_u);
+	u.transpose().print();
+	PX4_INFO("Aerodynamic forces NED inertial (N)");
+	_Fa_I.print();
+	PX4_INFO("Aerodynamic moments body frame (Nm)");
+	_Ma_B.print();
+	PX4_INFO("v_I.z: %f", (double)_v_I(2));
+	PX4_INFO("v_I_dot.z: %f", (double)_v_I_dot(2));
+        return 0;
 }
 
 int sih_main(int argc, char *argv[])
