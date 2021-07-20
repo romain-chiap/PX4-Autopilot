@@ -446,6 +446,22 @@ void Sih::send_gps()
 	} else {
 		_vehicle_gps_pos_pub = orb_advertise(ORB_ID(vehicle_gps_position), &_vehicle_gps_pos);
 	}
+
+	// airpseed
+	if (_vehicle==Vtype::FW) {
+		_airspeed.timestamp = _now;
+		_airspeed.true_airspeed_m_s	= fmaxf(0.1f,_v_B(0)+generate_wgn()*0.2f);
+		float rho=constrain(AeroSeg::RHO*(1.0f-RHO_GRADIENT*_p_I(2)),0.364f,AeroSeg::RHO);
+		_airspeed.indicated_airspeed_m_s = _airspeed.true_airspeed_m_s * sqrtf(rho/AeroSeg::RHO);
+		_airspeed.air_temperature_celsius = _baro_temp_c;
+		_airspeed.confidence = 0.7f;
+	}
+	if (_airspeed_pub != nullptr) {
+		orb_publish(ORB_ID(airspeed), _airspeed_pub, &_airspeed);
+
+	} else {
+		_airspeed_pub = orb_advertise(ORB_ID(airspeed), &_airspeed);
+	}
 }
 
 void Sih::publish_sih()

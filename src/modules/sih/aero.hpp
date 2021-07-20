@@ -72,6 +72,7 @@ private:
 	float alpha_eff;	// effectie angle of attack
 	float alpha_eff_dot;	// effectie angle of attack derivative
 	float alpha_eff_old;	// angle of attack [rad]
+	float rho;
 
 	// Table 3.1 SEMI-EMPIRICAL COEFFICIENTS FOR RECTANGULAR FLAT PLATES
 	static constexpr const int N_TAB=12;

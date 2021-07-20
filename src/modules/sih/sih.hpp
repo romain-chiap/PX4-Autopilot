@@ -52,6 +52,7 @@
 #include <uORB/topics/vehicle_attitude.h>           // to publish groundtruth
 #include <uORB/topics/vehicle_global_position.h>    // to publish groundtruth
 #include <uORB/topics/vehicle_gps_position.h>
+#include <uORB/topics/airspeed.h>
 
 extern "C" __EXPORT int sih_main(int argc, char *argv[]);
 
@@ -120,6 +121,10 @@ private:
 	vehicle_global_position_s           _gpos_gt{};
 	orb_advert_t                        _gpos_gt_pub{nullptr};
 
+	// airspeed
+	airspeed_s  						_airspeed{};
+	orb_advert_t  						_airspeed_pub{nullptr};
+
 	uORB::Subscription _parameter_update_sub{ORB_ID(parameter_update)};
 	int _actuator_out_sub {-1};
 
@@ -128,6 +133,7 @@ private:
 	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
 	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
 	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
+	static constexpr float RHO_GRADIENT = -7.8273e-05f;
 	static constexpr hrt_abstime LOOP_INTERVAL = 4000;      // 4ms => 250 Hz real-time
 	static constexpr float SPAN=0.86f; 	// wing span [m]
 	static constexpr float MAC=0.21f; 	// wing mean aerodynamic chord [m]
