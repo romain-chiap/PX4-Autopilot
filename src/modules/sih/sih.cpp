@@ -306,7 +306,7 @@ void Sih::generate_aerodynamics()
 	a+=0.25f;
 	if (a>=180.0f) {
 		test_nb++;
-		a=-180.0f;
+		a=-180.0f+0.25f;
 		if (flap>1e-3f) {
 			flap = -M_PI_F/12.0f;
 		} else {
