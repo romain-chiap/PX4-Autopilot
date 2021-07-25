@@ -300,14 +300,31 @@ void Sih::generate_force_and_torques()
 void Sih::generate_aerodynamics()
 {
 	_v_B = _C_IB.transpose() * _v_I; 	// velocity in body frame [m/s]
-	float altitude = _H0 - _p_I(2);
-	_wing_l.update_aero(_v_B, _w_B, altitude, _u[0]*FLAP_MAX);
-	_wing_r.update_aero(_v_B, _w_B, altitude, -_u[0]*FLAP_MAX);
-	_tailplane.update_aero(_v_B, _w_B, altitude, _u[1]*FLAP_MAX, _T_MAX*_u[3]);
-	_fin.update_aero(_v_B, _w_B, altitude, _u[2]*FLAP_MAX, _T_MAX*_u[3]);
-	_Fa_I = _C_IB * (_wing_l.Fa + _wing_r.Fa + _tailplane.Fa + _fin.Fa) - _KDV * _v_I; 	// sum of aerodynamic forces
+	// update_aero(matrix::Vector3f v_B, matrix::Vector3f w_B, float alt = 0.0f, float def = 0.0f, float thrust=0.0f, float dt = -1.0f)
+	static float a=-180.0f, flap=-M_PI_F/12.0f;
+	static int test_nb=0;
+	a+=0.25f;
+	if (a>=180.0f) {
+		test_nb++;
+		a=-180.0f;
+		if (flap>1e-3f) {
+			flap = -M_PI_F/12.0f;
+		} else {
+			flap += M_PI_F/12.0f;
+		}
+	}
+	Vector3f v_B = Vector3f(cosf(radians(a)),0.0f, sinf(radians(a)));
+	Vector3f w_B = Vector3f();
+	float alt=0.0f;
+	_wing.update_aero(v_B, w_B, alt, flap);
+	_wing.log_aero_seg(test_nb);
+
+	// _wing_r.update_aero(_v_B, _w_B, altitude, -_u[0]*FLAP_MAX);
+	// _tailplane.update_aero(_v_B, _w_B, altitude, _u[1]*FLAP_MAX, _T_MAX*_u[3]);
+	// _fin.update_aero(_v_B, _w_B, altitude, _u[2]*FLAP_MAX, _T_MAX*_u[3]);
+	_Fa_I = Vector3f(); 	// sum of aerodynamic forces
 	// _Ma_B = wing_l.Ma + wing_r.Ma + tailplane.Ma + fin.Ma + flap_moments() -_KDW * _w_B; 	// aerodynamic moments
-	_Ma_B = _wing_l.Ma + _wing_r.Ma + _tailplane.Ma + _fin.Ma - _KDW * _w_B; 	// aerodynamic moments
+	_Ma_B = Vector3f(); 	// aerodynamic moments
 }
 
 // apply the equations of motion of a rigid body and integrate one step
@@ -456,7 +473,7 @@ void Sih::send_airspeed()
 
 	_airspeed.timestamp = _now;
 	_airspeed.true_airspeed_m_s	= fmaxf(0.1f, _v_B(0) + generate_wgn() * 0.2f);
-	_airspeed.indicated_airspeed_m_s = _airspeed.true_airspeed_m_s * sqrtf(_wing_l.get_rho() / RHO);
+	_airspeed.indicated_airspeed_m_s = _airspeed.true_airspeed_m_s * sqrtf(_wing.get_rho() / RHO);
 	_airspeed.air_temperature_celsius = _baro_temp_c;
 	_airspeed.confidence = 0.7f;
 	_airspeed_pub.publish(_airspeed);

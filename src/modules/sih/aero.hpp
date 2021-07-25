@@ -41,6 +41,9 @@
 #include <conversion/rotation.h>    	// math::radians,
 // #include <lib/mathlib/mathlib.h>
 #include <math.h>
+#include <uORB/Publication.hpp>
+#include <uORB/topics/aero_seg.h>
+#include <drivers/drv_hrt.h>        // to get the real time
 
 // class Aerodynamic Segment ------------------------------------------------------------------------
 class AeroSeg
@@ -102,6 +105,12 @@ private:
 	float prop_radius;	// propeller radius [m], used to create the slipstream
 	float v_slipstream;	// slipstream velocity [m/s], computed from momentum theory
 
+	float flap_angle;
+
+	// for logging purpose
+	aero_seg_s					_aero_seg{};
+	uORB::Publication<aero_seg_s>		_aero_seg_pub{ORB_ID(aero_seg)};
+
 public:
 
 	matrix::Vector3f Fa;	// aerodynamic force
@@ -150,6 +159,7 @@ public:
 		temperature = T0_K + TEMP_GRADIENT * alt;
 		rho = pressure / R / temperature;
 
+		flap_angle = def;
 		matrix::Vector3f vel = C_BS.transpose() * (v_B + w_B % p_B); 	// velocity in segment frame
 		float vxz2 = vel(0) * vel(0) + vel(2) * vel(2);
 		if (prop_radius>1e-4f) {
@@ -176,6 +186,23 @@ public:
 
 	// return the air density at current altitude, must be called after update_aero()
 	float get_rho() {	return rho; 	}
+
+	void log_aero_seg(int test_nb) {
+		_aero_seg.timestamp=hrt_absolute_time();;
+		_aero_seg.alpha = math::degrees(alpha);
+		_aero_seg.alpha_eff = math::degrees(alpha_eff);
+		_aero_seg.alpha_eff_dot = math::degrees(alpha_eff_dot);
+		_aero_seg.flap = math::degrees(flap_angle);
+		_aero_seg.alpha_min = math::degrees(alpha_min);
+		_aero_seg.alpha_max = math::degrees(alpha_max);
+		_aero_seg.cl = CL;
+		_aero_seg.cd = CD;
+		_aero_seg.cm = CM;
+		_aero_seg.ar = ar;
+		_aero_seg.cr = cf / mac;
+		_aero_seg.test_nb = test_nb;
+		_aero_seg_pub.publish(_aero_seg);
+	}
 
 private:
 
@@ -208,9 +235,9 @@ private:
 					alpha_eff_dot) - afte)));	// normalized trailing edge separation
 			fle = 0.5f * (1.0f - tanhf(ale * (math::degrees(alpha_eff) - tau_le * math::degrees(
 					alpha_eff_dot) - afle)));	// normalized leading edge separation
-			CLmax = fCL(afs_rad - alpha_0) + dCLmax;
+			CLmax = fCL(afs_rad - alpha_0) + dCLmax - 1e-3f;
 			alpha_max = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmax / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))));
-			CLmin = fCL(-afs_rad - alpha_0) + dCLmax;
+			CLmin = fCL(-afs_rad - alpha_0) + dCLmax + 1e-3f;
 			alpha_min = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmin / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))));
 
 		} else { 	// this segment is a full flap
@@ -232,15 +259,15 @@ private:
 		}
 
 		// compute the aerodynamic coefficients
-		if (alpha_eff > alpha_max || alpha_eff < -alpha_min) {
-			high_aoa_coeff(a, def);
+		// if (alpha_eff > alpha_max || alpha_eff < -alpha_min) {
+		// 	high_aoa_coeff(a, def);
 
-		} else {
+		// } else {
 			CL = fCL(alpha_eff);
 			CD = CD0 + CL * fabsf(tanf(alpha_eff));
-			// CM = fCM(alpha_eff);
-			CM = 0.0f; 	// debug
-		}
+			CM = fCM(alpha_eff);
+			// CM = 0.0f; 	// debug
+		// }
 	}
 
 	// high angle of attack coefficient based on flat plate

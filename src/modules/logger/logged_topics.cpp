@@ -115,6 +115,7 @@ void LoggedTopics::add_default_topics()
 	add_topic("vehicle_status_flags");
 	add_topic("vtol_vehicle_status", 200);
 	add_topic("wind", 1000);
+	add_topic("aero_seg");
 
 	// Control allocation topics
 	add_topic("vehicle_actuator_setpoint", 20);
