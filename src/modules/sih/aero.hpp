@@ -143,7 +143,7 @@ public:
 		ar = (AR <= 0.0f) ? span / mac : AR; // setting AR<=0 will compute it from span and mac
 		alpha_eff = 0.0f;
 		alpha_eff_old = 0.0f;
-		kp = 2.0f * M_PI_F / (1.0f + 2.0f * (ar + 4.0f) / (ar * (ar + 2.0f)));
+		kp = 2.0f * M_PI_F / (1.0f + 2.0f * (ar + 4.0f) / (ar * (ar + 2.0f))); 	// CL_alpha form 2D to 3D
 		kn = 0.41f * (1.0f - expf(-17.0f / ar));
 		ale = lin_interp_lkt(AR_tab, ale_tab, ar, N_TAB);
 		ate = lin_interp_lkt(AR_tab, ate_tab, ar, N_TAB);
