@@ -71,6 +71,7 @@ private:
 	static constexpr float CD0 = 0.04f; 		// no lift drag coefficient
 	static constexpr float CD90 = 1.98f; 		// 90 deg angle of attack drag coefficient
 	static constexpr float AF_DOT_MAX = M_PI_F / 2.0f;
+	static constexpr float ALPHA_BLEND = M_PI_F / 18.0f;
 
 	// here we make the distinction of the plate (i.e. wing, or tailplane, or fin) and the segment
 	// the segment can be a portion of the wing, but the aspect ratio (AR) of the wing needs to be used
@@ -131,6 +132,9 @@ public:
 		static const float afle_tab[N_TAB] = {59.00f, 58.60f, 58.20f, 50.00f, 41.53f, 26.70f, 23.44f, 21.00f, 18.63f, 14.28f, 11.60f, 10.00f};
 		static const float afte_tab[N_TAB] = {59.00f, 58.60f, 58.20f, 51.85f, 41.46f, 28.09f, 39.40f, 35.86f, 26.76f, 19.76f, 16.43f, 14.00f};
 		static const float afs_tab[N_TAB] = {49.00f, 54.00f, 56.00f, 48.00f, 40.00f, 29.00f, 27.00f, 25.00f, 24.00f, 22.00f, 22.00f, 20.00f};
+
+		// static const float as_low_tab[N_TAB] = {32.0f, 36.0f, 34.0f, 38.0f, 32.0f, 21.0f, 16.0f, 11.0f, 10.0f, 8.0f};
+		// static const float as_high_tab[N_TAB] = {40.0f, 60.0f, 55.0f, 56.0f, 40.0f, 29.0f, 28.0f, 24.0f, 22.0f, 20.0f};
 
 		span = span_;
 		mac = mac_;
@@ -221,7 +225,7 @@ private:
 			tau_f = 1.0f - (theta_f - sinf(theta_f)) / M_PI_F;
 			deltaCL = kp * tau_f * eta_f * def;
 			dCLmax = (1.0f - cf / mac) * deltaCL;
-			alf0eff = solve_alpha_eff(kp, KV, deltaCL);
+			alf0eff = solve_alpha_eff(kp, KV, deltaCL, alpha_0);
 			alpha_eff = a - alf0eff;
 
 			if (dt < 1e-9f) {
@@ -233,12 +237,14 @@ private:
 
 			fte = 0.5f * (1.0f - tanhf(ate * (math::degrees(alpha_eff) - tau_te * math::degrees(
 					alpha_eff_dot) - afte)));	// normalized trailing edge separation
+			fte =1.0f;
 			fle = 0.5f * (1.0f - tanhf(ale * (math::degrees(alpha_eff) - tau_le * math::degrees(
 					alpha_eff_dot) - afle)));	// normalized leading edge separation
-			CLmax = fCL(afs_rad - alpha_0) + dCLmax - 1e-3f;
-			alpha_max = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmax / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))));
-			CLmin = fCL(-afs_rad - alpha_0) + dCLmax + 1e-3f;
-			alpha_min = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmin / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))));
+			fle=1.0f;
+			CLmax = fCL(afs_rad - alpha_0) + dCLmax;
+			alpha_max = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmax / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))), afs_rad - alpha_0);
+			CLmin = fCL(-afs_rad - alpha_0) + dCLmax;
+			alpha_min = alf0eff - solve_alpha_eff(kp, KV * fle * fle, CLmin / (0.25f * (1.0f + sqrtf(fte)) * (1.0f + sqrtf(fte))), -afs_rad - alpha_0);
 
 		} else { 	// this segment is a full flap
 			alpha_eff = a + def;
@@ -252,22 +258,56 @@ private:
 
 			fte = 0.5f * (1.0f - tanhf(ate * (math::degrees(alpha_eff) - tau_te * math::degrees(
 					alpha_eff_dot) - afte)));	// normalized trailing edge separation
+			fte =1.0f;
 			fle = 0.5f * (1.0f - tanhf(ale * (math::degrees(alpha_eff) - tau_le * math::degrees(
 					alpha_eff_dot) - afle)));	// normalized leading edge separation
+			fle=1.0f;
 			alpha_max = afs_rad;
 			alpha_min = -afs_rad;
 		}
 
-		// compute the aerodynamic coefficients
-		// if (alpha_eff > alpha_max || alpha_eff < -alpha_min) {
-		// 	high_aoa_coeff(a, def);
-
+		// // compute the aerodynamic coefficients
+		// if (alpha_eff < alpha_min - ALPHA_BLEND) {
+		// 	// negative high aoa region
+		// 	high_aoa_coeff(alpha_eff, def);
+		// else if (alpha_eff < alpha_min) {
+		// 	// lower blending region
+		// 	high_aoa_coeff(alpha_min - ALPHA_BLEND, def);
+		// 	float CL_ = fCL(alpha_min);
+		// 	float CD_ = CD0 + fabsf(CL*tanf(alpha_min));
+		// 	float CM_ = -fCM(alpha_min);
+		// 	CL = lin_interp(alpha_min - ALPHA_BLEND, CL, alpha_min, CL_, alpha_eff);
+		// 	CD = lin_interp(alpha_min - ALPHA_BLEND, CD, alpha_min, CD_, alpha_eff);
+		// 	CM = lin_interp(alpha_min - ALPHA_BLEND, CM, alpha_min, CM_, alpha_eff);
+		// } else if (alpha_eff < alpha_max) {
+		// 	// low aoa region
+		// 	CL = fCL(alpha_eff);
+		// 	CD = CD0 + fabsf(CL*tanf(alpha_eff));
+		// 	CM = -fCM(alpha_eff);
+		// } else if (alpha_eff < alpha_max + ALPHA_BLEND){
+		// 	// higher blending region
+		// 	high_aoa_coeff(alpha_max + ALPHA_BLEND, def);
+		// 	float CL_ = fCL(alpha_max);
+		// 	float CD_ = CD0 + fabsf(CL*tanf(alpha_max));
+		// 	float CM_ = -fCM(alpha_max);
+		// 	CL = lin_interp(alpha_max, CL_, alpha_max + ALPHA_BLEND, CL, alpha_eff);
+		// 	CD = lin_interp(alpha_max, CD_, alpha_max + ALPHA_BLEND, CD, alpha_eff);
+		// 	CM = lin_interp(alpha_max, CM_, alpha_max + ALPHA_BLEND, CM, alpha_eff);
 		// } else {
-			CL = fCL(alpha_eff);
-			CD = CD0 + CL * fabsf(tanf(alpha_eff));
-			CM = fCM(alpha_eff);
-			// CM = 0.0f; 	// debug
+		// 	// positive high aoa region
+		// 	high_aoa_coeff(alpha_eff, def);
 		// }
+
+		// compute the aerodynamic coefficients
+		if (alpha_eff > alpha_max || alpha_eff < alpha_min) {
+			high_aoa_coeff(alpha_eff, def);
+		} else {
+			CL = fCL(alpha_eff);
+			// CD = CD0 + CL * fabsf(tanf(alpha_eff));
+			CD = CD0 + fabsf(CL*tanf(alpha_eff));
+			CM = -fCM(alpha_eff);
+			// CM = 0.0f; 	// debug
+		}
 	}
 
 	// high angle of attack coefficient based on flat plate
@@ -283,7 +323,7 @@ private:
 		float CT = 0.5f * CD0 * cosf(a);
 		CL = CN * cosf(a) - CT * sinf(a);
 		CD = CN * sinf(a) + CT * cosf(a);
-		CM = -CN * (0.25f - 7.0f / 40.0f * (1.0f - 2.0f / M_PI_F * fabsf(a)));
+		CM = - CN * (0.25f - 7.0f / 40.0f * (1.0f - 2.0f / M_PI_F * fabsf(a)));
 	}
 
 	// linear interpolation between 2 points
@@ -321,11 +361,11 @@ private:
 		return lin_interp(x_tab[i], y_tab[i], x_tab[i + 1], y_tab[i + 1], x);
 	}
 
-	float solve_alpha_eff(const float Kp, const float Kv, const float dCL)
+	float solve_alpha_eff(const float Kp, const float Kv, const float dCL, const float a0)
 	{
 		// we use here the Newton method with explicit derivative to find the root of equation 3.15
 		// we can remove fTE and fLE since we are at low angle
-		float a = alpha_0; 	// initialized to the zero lift angle of attack
+		float a = a0; 	// initialized to the zero lift angle of attack
 
 		for (int i = 0; i < 3; i++) {
 			a = a - (-Kp * sinf(a) * cosf(a) * cosf(a) - Kv * fabsf(sinf(a)) * sinf(a) * cosf(a) - dCL) /
