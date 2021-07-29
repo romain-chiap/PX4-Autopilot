@@ -13,4 +13,6 @@ float32 cd 		# drap coefficient
 float32 cm 		# pitching moment coefficient
 float32 ar 		# aspect ratio span/mac
 float32 cr 		# chord ratio flap_chord/chord
+float32 fle 		# normalized leading edge separation, 1 is attached, 0 is separated
+float32 fte 		# normalized trailing edge separation, 1 is attached, 0 is separated
 uint8   test_nb 	# index to separate the different tests
