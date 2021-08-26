@@ -124,15 +124,15 @@ private:
 	float _alpha_min; 	// min angle of attack (stall angle)
 	float _alpha_max;	// min angle of attack (stall angle)
 	float _alf0eff;		// effective zero lift angle of attack
-	float _alfmeff;		// effective maximum lift angle of attack
+	// float _alfmeff;		// effective maximum lift angle of attack
 	float _alpha_eff;	// effectie angle of attack
-	float _alpha_eff_dot;	// effectie angle of attack derivative
+	// float _alpha_eff_dot;	// effectie angle of attack derivative
 	float _alpha_eff_old;	// angle of attack [rad]
 
 	float _pressure; 	// pressure in Pa at current altitude
 	float _temperature;	// temperature in K at current altitude
 	float _prop_radius;	// propeller radius [m], used to create the slipstream
-	float _v_slipstream;	// slipstream velocity [m/s], computed from momentum theory
+	// float _v_slipstream;	// slipstream velocity [m/s], computed from momentum theory
 
 	matrix::Vector3f _Fa;	// aerodynamic force
 	matrix::Vector3f _Ma;	// aerodynamic moment computed at _CM directly
