@@ -262,8 +262,13 @@ public:
 			return;
 		}
 
+<<<<<<< HEAD
 		_alpha = matrix::wrap_pi(atan2f(vel(2), vel(0)) - _alpha_0);
 >>>>>>> tailsitter
+=======
+		_alpha = matrix::wrap_pi(atan2f(_v_S(2), _v_S(0)) - _alpha_0);
+		// _alpha = atan2f(_v_S(2), _v_S(0));
+>>>>>>> ts backup
 		aoa_coeff(_alpha, sqrtf(vxz2), def);
 		_Fa = _C_BS * (0.5f * _rho * vxz2 * _span * _mac) * matrix::Vector3f(_CL * sinf(_alpha) - _CD * cosf(_alpha),
 				0.0f,
@@ -290,9 +295,15 @@ public:
 	matrix::Vector3f get_Ma() const { return _Ma; }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// return the velocity in segment frame
 	matrix::Vector3f get_vS() const { return _v_S; }
 =======
+=======
+	// return the velocity in segment frame
+	matrix::Vector3f get_vS() const { return _v_S; }
+
+>>>>>>> ts backup
 	// copy assignment operator
 	AeroSeg& operator=(const AeroSeg&){return *this;}
 >>>>>>> tailsitter
