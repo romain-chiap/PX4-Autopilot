@@ -163,13 +163,8 @@ public:
 	 * alpha_min_deg: maximum negative angle of attack before stall. Setting to 0 (default) will compute it from a table for flat plate.
 	 */
 	AeroSeg(float span, float mac, float alpha_0_deg, matrix::Vector3f p_B, float dihedral_deg = 0.0f,
-<<<<<<< HEAD
 		float AR = -1.0f, float cf = 0.0f, float prop_radius = -1.0f, float cl_alpha = 2.0f * M_PI_F,
 		float alpha_max_deg = 0.0f, float alpha_min_deg = 0.0f)
-=======
-			 float AR = -1.0f, float cf = 0.0f, float prop_radius = -1.0f, float cl_alpha = 2.0f * M_PI_F,
-			 float alpha_max_deg = 0.0f, float alpha_min_deg = 0.0f)
->>>>>>> tailsitter
 	{
 		static const float AR_tab[N_TAB] = {0.1666f, 0.333f, 0.4f, 0.5f, 1.0f, 1.25f, 2.0f, 3.0f, 4.0f, 6.0f};
 		static const float ale_tab[N_TAB] = {3.00f, 3.64f, 4.48f, 7.18f, 10.20f, 13.38f, 14.84f, 14.49f, 9.95f, 12.93f, 15.00f, 15.00f};
@@ -223,12 +218,8 @@ public:
 	 * def: flap deflection angle [rad], default is 0.
 	 * thrust: thrust force [N] from the propeller to compute the slipstream velocity, default is 0.
 	 */
-<<<<<<< HEAD
 	void update_aero(const matrix::Vector3f &v_B, const matrix::Vector3f &w_B, float alt = 0.0f, float def = 0.0f,
 			 float thrust = 0.0f)
-=======
-	void update_aero(const matrix::Vector3f &v_B, const matrix::Vector3f &w_B, float alt = 0.0f, float def = 0.0f, float thrust = 0.0f)
->>>>>>> tailsitter
 	{
 		// ISA model taken from Mustafa Cavcar, Anadolu University, Turkey
 		_pressure = P0 * powf(1.0f - 0.0065f * alt / T0_K, 5.2561f);
@@ -250,25 +241,12 @@ public:
 		if (vxz2 < 0.01f) {
 			_Fa = matrix::Vector3f();
 			_Ma = matrix::Vector3f();
-<<<<<<< HEAD
 			_alpha = 0.0f;
 			return;
 		}
 
 		_alpha = matrix::wrap_pi(atan2f(_v_S(2), _v_S(0)) - _alpha_0);
 		// _alpha = atan2f(_v_S(2), _v_S(0));
-=======
-			_alpha=0.0f;
-			return;
-		}
-
-<<<<<<< HEAD
-		_alpha = matrix::wrap_pi(atan2f(vel(2), vel(0)) - _alpha_0);
->>>>>>> tailsitter
-=======
-		_alpha = matrix::wrap_pi(atan2f(_v_S(2), _v_S(0)) - _alpha_0);
-		// _alpha = atan2f(_v_S(2), _v_S(0));
->>>>>>> ts backup
 		aoa_coeff(_alpha, sqrtf(vxz2), def);
 		_Fa = _C_BS * (0.5f * _rho * vxz2 * _span * _mac) * matrix::Vector3f(_CL * sinf(_alpha) - _CD * cosf(_alpha),
 				0.0f,
@@ -294,19 +272,8 @@ public:
 	// must be called after update_aero()
 	matrix::Vector3f get_Ma() const { return _Ma; }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	// return the velocity in segment frame
 	matrix::Vector3f get_vS() const { return _v_S; }
-=======
-=======
-	// return the velocity in segment frame
-	matrix::Vector3f get_vS() const { return _v_S; }
-
->>>>>>> ts backup
-	// copy assignment operator
-	AeroSeg& operator=(const AeroSeg&){return *this;}
->>>>>>> tailsitter
 
 private:
 
