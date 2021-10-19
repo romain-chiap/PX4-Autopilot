@@ -115,6 +115,10 @@ MulticopterRateControl::Run()
 
 		updateParams();
 		parameters_updated();
+		_test.timestamp = hrt_absolute_time();
+		_test.value=_param_test.get();
+		_test_pub.publish(_test);
+
 	}
 
 	/* run controller on gyro changes */

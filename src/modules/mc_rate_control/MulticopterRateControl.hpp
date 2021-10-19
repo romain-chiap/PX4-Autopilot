@@ -59,6 +59,7 @@
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/vehicle_rates_setpoint.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/test.h>
 
 using namespace time_literals;
 
@@ -106,6 +107,10 @@ private:
 	uORB::Publication<actuator_controls_s>		_actuators_0_pub;
 	uORB::PublicationMulti<rate_ctrl_status_s>	_controller_status_pub{ORB_ID(rate_ctrl_status)};	/**< controller status publication */
 	uORB::Publication<vehicle_rates_setpoint_s>	_v_rates_sp_pub{ORB_ID(vehicle_rates_setpoint)};			/**< rate setpoint publication */
+
+	test_s 					_test{}; 	// this is the instance of the topic
+	uORB::Publication<test_s> 		_test_pub{ORB_ID(test)}; 	// this is the publisher
+
 
 	vehicle_control_mode_s		_v_control_mode{};
 	vehicle_status_s		_vehicle_status{};
@@ -160,7 +165,9 @@ private:
 
 		(ParamBool<px4::params::MC_BAT_SCALE_EN>) _param_mc_bat_scale_en,
 
-		(ParamInt<px4::params::CBRK_RATE_CTRL>) _param_cbrk_rate_ctrl
+		(ParamInt<px4::params::CBRK_RATE_CTRL>) _param_cbrk_rate_ctrl,
+
+		(ParamFloat<px4::params::TEST>) _param_test			// test for homework 2
 	)
 
 	matrix::Vector3f _acro_rate_max;	/**< max attitude rates in acro mode */
