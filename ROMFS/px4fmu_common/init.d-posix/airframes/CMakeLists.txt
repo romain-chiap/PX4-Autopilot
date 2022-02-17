@@ -77,4 +77,7 @@ px4_add_romfs_files(
 	6011_typhoon_h480.post
 	6012_typhoon_ctrlalloc
 	6012_typhoon_ctrlalloc.post
+	10040_quadx
+	10041_airplane
+	10042_xvert
 )

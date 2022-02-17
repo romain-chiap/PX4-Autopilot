@@ -437,10 +437,11 @@ PARAM_DEFINE_FLOAT(SIH_DISTSNSR_OVR, -1.0f);
 PARAM_DEFINE_FLOAT(SIH_T_TAU, 0.05f);
 
 /**
- * Vehicle type (0 for MC, 1 for FW)
+ * Vehicle type (0 for MC, 1 for FW, 2 for TS)
  *
  * @value 0 MC
  * @value 1 FW
+ * @value 2 Tailsitter
  * @reboot_required true
  * @group Simulation In Hardware
  */

@@ -124,24 +124,16 @@ private:
 	float alpha_min; 	// min angle of attack (stall angle)
 	float alpha_max;	// min angle of attack (stall angle)
 	float alf0eff;		// effective zero lift angle of attack
-	float alfmeff;		// effective maximum lift angle of attack
 	float alpha_eff;	// effectie angle of attack
-	float alpha_eff_dot;	// effectie angle of attack derivative
-	float alpha_eff_old;	// angle of attack [rad]
 
 	float pressure; 	// pressure in Pa at current altitude
 	float temperature;	// temperature in K at current altitude
 	float prop_radius;	// propeller radius [m], used to create the slipstream
-	float v_slipstream;	// slipstream velocity [m/s], computed from momentum theory
 
 	matrix::Vector3f Fa;	// aerodynamic force
 	matrix::Vector3f Ma;	// aerodynamic moment computed at CM directly
 
 public:
-
-	AeroSeg(){
-		AeroSeg(1.0f, 0.2f, 0.0f, matrix::Vector3f());
-	}
 
 	/** public explicit constructor
 	 * AeroSeg(float span_, float mac_, float alpha_0_deg, matrix::Vector3f p_B_, float dihedral_deg = 0.0f,
@@ -160,7 +152,7 @@ public:
 	 * alpha_max_deg: maximum angle of attack before stall. Setting to 0 (default) will compute it from a table for flat plate.
 	 * alpha_min_deg: maximum negative angle of attack before stall. Setting to 0 (default) will compute it from a table for flat plate.
 	 */
-	explicit AeroSeg(float span_, float mac_, float alpha_0_deg, matrix::Vector3f p_B_, float dihedral_deg = 0.0f,
+	explicit AeroSeg(float span_, float mac_, float alpha_0_deg, const matrix::Vector3f& p_B_, float dihedral_deg = 0.0f,
 			 float AR = -1.0f, float cf_ = 0.0f, float prop_radius_=-1.0f, float cl_alpha=2.0f*M_PI_F, float alpha_max_deg=0.0f, float alpha_min_deg=0.0f)
 	{
 		static const float AR_tab[N_TAB] = {0.1666f, 0.333f, 0.4f, 0.5f, 1.0f, 1.25f, 2.0f, 3.0f, 4.0f, 6.0f};
@@ -173,10 +165,9 @@ public:
 		span = span_;
 		mac = mac_;
 		alpha_0 = math::radians(alpha_0_deg);
-		p_B = matrix::Vector3f(p_B_);
+		p_B = p_B_;
 		ar = (AR <= 0.0f) ? span / mac : AR; // setting AR<=0 will compute it from span and mac
 		alpha_eff = 0.0f;
-		alpha_eff_old = 0.0f;
 		kp = cl_alpha / (1.0f + 2.0f * (ar + 4.0f) / (ar * (ar + 2.0f)));
 		kn = 0.41f * (1.0f - expf(-17.0f / ar));
 		ale = lin_interp_lkt(AR_tab, ale_tab, ar, N_TAB);
@@ -199,6 +190,8 @@ public:
 		prop_radius=prop_radius_;
 		kD = 1.0f/(M_PI_F*k0*ar);
 	}
+
+	AeroSeg() : AeroSeg(1.0f, 0.2f, 0.0f, matrix::Vector3f()) {}
 
 	/** aerodynamic force and moments of a generic flate plate segment
 	 * void update_aero(matrix::Vector3f v_B, matrix::Vector3f w_B, float alt = 0.0f,
@@ -257,7 +250,6 @@ private:
 	// low angle of attack and stalling region coefficient based on flat plate
 	void aoa_coeff(float a, float vxz, float def)
 	{
-		alpha_eff_old = alpha_eff;
 		tau_te = (vxz > 0.01f) ? 4.5f * mac / vxz : 0.0f;
 		tau_le = (vxz > 0.01f) ? 0.5f * mac / vxz : 0.0f;
 

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*   Copyright (c) 2019-2020 PX4 Development Team. All rights reserved.
+*   Copyright (c) 2019-2022 PX4 Development Team. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions
@@ -45,17 +45,19 @@
 //     In 2018 IEEE International Conference on Robotics and Automation (ICRA), pp. 6573-6580. IEEE, 2018.
 // The aerodynamic model is from [2]
 // [2] Khan W, supervised by Nahon M, "Dynamics modeling of agile fixed-wing unmanned aerial vehicles."
-//     McGill University, PhD thesis, 2016.
+//     McGill University (Canada), PhD thesis, 2016.
 // The quaternion integration are from [3]
 // [3] Sveier A, Sjøberg AM, Egeland O. "Applied Runge–Kutta–Munthe-Kaas Integration for the Quaternion Kinematics."
 //     Journal of Guidance, Control, and Dynamics. 2019 Dec;42(12):2747-54.
+// The tailsitter model is from [4]
+// [4] Chiappinelli R, supervised by Nahon M, "Modeling and control of a flying wing tailsitter unmanned aerial vehicle."
+//     McGill University (Canada), Masters Thesis, 2018.
 
 #pragma once
 
 #include <px4_platform_common/module.h>
 #include <px4_platform_common/module_params.h>
 #include <px4_platform_common/posix.h>
-#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 
 #include <matrix/matrix/math.hpp>   // matrix, vectors, dcm, quaterions
 #include <conversion/rotation.h>    // math::radians,
@@ -65,7 +67,7 @@
 #include <lib/drivers/barometer/PX4Barometer.hpp>
 #include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
 #include <lib/drivers/magnetometer/PX4Magnetometer.hpp>
-#include <lib/perf/perf_counter.h>
+#include <perf/perf_counter.h>
 #include <uORB/Publication.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionInterval.hpp>
@@ -78,16 +80,26 @@
 #include <uORB/topics/distance_sensor.h>
 #include <uORB/topics/airspeed.h>
 
+#if defined(ENABLE_LOCKSTEP_SCHEDULER)
+#include <sys/time.h>
+#endif
+
 using namespace time_literals;
 
-class Sih : public ModuleBase<Sih>, public ModuleParams, public px4::ScheduledWorkItem
+extern "C" __EXPORT int sih_main(int argc, char *argv[]);
+
+class Sih : public ModuleBase<Sih>, public ModuleParams
 {
 public:
 	Sih();
-	~Sih() override;
+
+	virtual ~Sih();
 
 	/** @see ModuleBase */
 	static int task_spawn(int argc, char *argv[]);
+
+	/** @see ModuleBase */
+	static Sih *instantiate(int argc, char *argv[]);
 
 	/** @see ModuleBase */
 	static int custom_command(int argc, char *argv[]);
@@ -98,16 +110,22 @@ public:
 	/** @see ModuleBase */
 	static int print_usage(const char *reason = nullptr);
 
+	/** @see ModuleBase::run() */
+	void run() override;
+
 	static float generate_wgn();    // generate white Gaussian noise sample
 
 	// generate white Gaussian noise sample as a 3D vector with specified std
 	static matrix::Vector3f noiseGauss3f(float stdx, float stdy, float stdz);
 
-	bool init();
+	// timer called periodically to post the semaphore
+	static void timer_callback(void *sem);
+
+	static matrix::Quatf expq(const matrix::Vector3f &u);
+
+	static matrix::Dcmf inv_r_jacobian (const matrix::Vector3f &u);
 
 private:
-	void Run() override;
-
 	void parameters_updated();
 
 	// simulated sensor instances
@@ -143,18 +161,12 @@ private:
 	uORB::Subscription _actuator_out_sub{ORB_ID(actuator_outputs)};
 
 	// hard constants
-	static constexpr uint16_t NB_MOTORS = 4;
+	static constexpr uint16_t NB_MOTORS = 6;
 	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
 	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
 	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
 	// Aerodynamic coefficients
 	static constexpr float RHO = 1.225f; 		// air density at sea level [kg/m^3]
-	static constexpr float CD0 = 0.04f; 		// no lift drag coefficient
-	static constexpr float CD90 = 1.98f; 		// 90 deg angle of attack drag coefficient
-	static constexpr float AOA_BLEND = 20.0f * M_PI_F / 180.0f; // blending angle width [rad]
-	static constexpr float CLa = 5.8015f; 				// CL/rad
-	static constexpr float K0 = 0.87f;     	// Oswald factor
-	static constexpr float CMa = -0.1f;     	// pitching moment lift curve slope
 	static constexpr float SPAN = 0.86f; 	// wing span [m]
 	static constexpr float MAC = 0.21f; 	// wing mean aerodynamic chord [m]
 	static constexpr float RP = 0.1f; 	// radius of the propeller [m]
@@ -171,16 +183,26 @@ private:
 	void send_airspeed();
 	void send_dist_snsr();
 	void publish_sih();
-	void generate_aerodynamics();
-	float sincf(float x);	// sin cardinal = sin(x)/x
-	matrix::Quatf expq(const matrix::Vector3f& u);  // quaternion exponential as defined in [3]
-	// States eom_f(States); 	// equations of motion f: x'=f(x)
+	void generate_fw_aerodynamics();
+	void generate_ts_aerodynamics();
+	void sim_step();
 
+#if defined(ENABLE_LOCKSTEP_SCHEDULER)
+	void lockstep_loop();
+	int _lockstep_component{-1};
+	uint64_t _current_simulation_time_us{0};
+	uint64_t _last_iteration_wall_time_us{0};
+#endif
+
+	void realtime_loop();
+	px4_sem_t       _data_semaphore;
+	hrt_call 	_timer_call;
 
 	perf_counter_t  _loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 	perf_counter_t  _loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")};
 
 	hrt_abstime _last_run{0};
+	hrt_abstime _last_actuator_output_time{0};
 	hrt_abstime _baro_time{0};
 	hrt_abstime _gps_time{0};
 	hrt_abstime _airspeed_time{0};
@@ -207,7 +229,7 @@ private:
 	matrix::Vector3f    _w_B_dot;       // body rates differential
 	float       _u[NB_MOTORS];          // thruster signals
 
-	enum class VehicleType {MC, FW};
+	enum class VehicleType {MC, FW, TS};
 	VehicleType _vehicle = VehicleType::MC;
 
 	// aerodynamic segments for the fixedwing
@@ -216,7 +238,43 @@ private:
 	AeroSeg _wing_r = AeroSeg(SPAN / 2.0f, MAC, -4.0f, matrix::Vector3f(0.0f, SPAN / 4.0f, 0.0f), -3.0f,
 				  SPAN / MAC, MAC / 3.0f);
 	AeroSeg _tailplane = AeroSeg(0.3f, 0.1f, 0.0f, matrix::Vector3f(-0.4f, 0.0f, 0.0f), 0.0f, -1.0f, 0.05f, RP);
-	AeroSeg _fin = AeroSeg(0.25, 0.15, 0.0f, matrix::Vector3f(-0.45f, 0.0f, -0.1f), -90.0f, -1.0f, 0.08f, RP);
+	AeroSeg _fin = AeroSeg(0.25, 0.18, 0.0f, matrix::Vector3f(-0.45f, 0.0f, -0.1f), -90.0f, -1.0f, 0.12f, RP);
+	AeroSeg _fuselage = AeroSeg(0.2, 0.8, 0.0f, matrix::Vector3f(0.0f, 0.0f, 0.0f), -90.0f);
+
+	// aerodynamic segments for the tailsitter
+	static constexpr const int NB_TS_SEG = 11;
+	static constexpr const float TS_AR = 3.13f;
+	static constexpr const float TS_CM = 0.115f;	// longitudinal position of the CM from trailing edge
+	static constexpr const float TS_RP = 0.0625f;	// propeller radius [m]
+	static constexpr const float TS_DEF_MAX = math::radians(39.0f); 	// max deflection
+	matrix::Dcmf _C_BS = matrix::Dcmf(matrix::Eulerf(0.0f, math::radians(90.0f), 0.0f)); // segment to body 90 deg pitch
+	AeroSeg _ts[NB_TS_SEG] = {
+		AeroSeg(0.0225f, 0.110f, 0.0f, matrix::Vector3f(0.083f - TS_CM, -0.239f, 0.0f), 0.0f, TS_AR),
+		AeroSeg(0.0383f, 0.125f, 0.0f, matrix::Vector3f(0.094f - TS_CM, -0.208f, 0.0f), 0.0f, TS_AR, 0.063f),
+		// AeroSeg(0.0884f, 0.148f, 0.0f, matrix::Vector3f(0.111f-TS_CM, -0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
+		AeroSeg(0.0884f, 0.085f, 0.0f, matrix::Vector3f(0.158f - TS_CM, -0.143f, 0.0f), 0.0f, TS_AR),
+		AeroSeg(0.0884f, 0.063f, 0.0f, matrix::Vector3f(0.047f - TS_CM, -0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
+		AeroSeg(0.0633f, 0.176f, 0.0f, matrix::Vector3f(0.132f - TS_CM, -0.068f, 0.0f), 0.0f, TS_AR, 0.063f),
+		AeroSeg(0.0750f, 0.231f, 0.0f, matrix::Vector3f(0.173f - TS_CM,  0.000f, 0.0f), 0.0f, TS_AR),
+		AeroSeg(0.0633f, 0.176f, 0.0f, matrix::Vector3f(0.132f - TS_CM,  0.068f, 0.0f), 0.0f, TS_AR, 0.063f),
+		// AeroSeg(0.0884f, 0.148f, 0.0f, matrix::Vector3f(0.111f-TS_CM,  0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
+		AeroSeg(0.0884f, 0.085f, 0.0f, matrix::Vector3f(0.158f - TS_CM,  0.143f, 0.0f), 0.0f, TS_AR),
+		AeroSeg(0.0884f, 0.063f, 0.0f, matrix::Vector3f(0.047f - TS_CM,  0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
+		AeroSeg(0.0383f, 0.125f, 0.0f, matrix::Vector3f(0.094f - TS_CM,  0.208f, 0.0f), 0.0f, TS_AR, 0.063f),
+		AeroSeg(0.0225f, 0.110f, 0.0f, matrix::Vector3f(0.083f - TS_CM,  0.239f, 0.0f), 0.0f, TS_AR)
+	};
+
+	// AeroSeg _ts[NB_TS_SEG] = {
+	// 	AeroSeg(0.0225f, 0.110f, -90.0f, matrix::Vector3f(0.0f, -0.239f, TS_CM-0.083f), 0.0f, TS_AR),
+	// 	AeroSeg(0.0383f, 0.125f, -90.0f, matrix::Vector3f(0.0f, -0.208f, TS_CM-0.094f), 0.0f, TS_AR, 0.063f),
+	// 	AeroSeg(0.0884f, 0.148f, -90.0f, matrix::Vector3f(0.0f, -0.143f, TS_CM-0.111f), 0.0f, TS_AR, 0.063f, TS_RP),
+	// 	AeroSeg(0.0633f, 0.176f, -90.0f, matrix::Vector3f(0.0f, -0.068f, TS_CM-0.132f), 0.0f, TS_AR, 0.063f),
+	// 	AeroSeg(0.0750f, 0.231f, -90.0f, matrix::Vector3f(0.0f,  0.000f, TS_CM-0.173f), 0.0f, TS_AR),
+	// 	AeroSeg(0.0633f, 0.176f, -90.0f, matrix::Vector3f(0.0f,  0.068f, TS_CM-0.132f), 0.0f, TS_AR, 0.063f),
+	// 	AeroSeg(0.0884f, 0.148f, -90.0f, matrix::Vector3f(0.0f,  0.143f, TS_CM-0.111f), 0.0f, TS_AR, 0.063f, TS_RP),
+	// 	AeroSeg(0.0383f, 0.125f, -90.0f, matrix::Vector3f(0.0f,  0.208f, TS_CM-0.094f), 0.0f, TS_AR, 0.063f),
+	// 	AeroSeg(0.0225f, 0.110f, -90.0f, matrix::Vector3f(0.0f,  0.239f, TS_CM-0.083f), 0.0f, TS_AR)
+	// 	};
 
 	// sensors reconstruction
 	matrix::Vector3f    _acc;
@@ -244,7 +302,7 @@ private:
 	// parameters defined in sih_params.c
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::IMU_GYRO_RATEMAX>) _imu_gyro_ratemax,
-
+		(ParamInt<px4::params::IMU_INTEG_RATE>) _imu_integration_rate,
 		(ParamFloat<px4::params::SIH_MASS>) _sih_mass,
 		(ParamFloat<px4::params::SIH_IXX>) _sih_ixx,
 		(ParamFloat<px4::params::SIH_IYY>) _sih_iyy,

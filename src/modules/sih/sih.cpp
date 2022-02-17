@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2019-2020 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2019-2022 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,8 +54,16 @@ using namespace matrix;
 using namespace time_literals;
 
 Sih::Sih() :
-	ModuleParams(nullptr),
-	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::rate_ctrl)
+	ModuleParams(nullptr)
+{}
+
+Sih::~Sih()
+{
+	perf_free(_loop_perf);
+	perf_free(_loop_interval_perf);
+}
+
+void Sih::run()
 {
 	_px4_accel.set_temperature(T1_C);
 	_px4_gyro.set_temperature(T1_C);
@@ -71,17 +79,91 @@ Sih::Sih() :
 	_airspeed_time = task_start;
 	_gt_time = task_start;
 	_dist_snsr_time = task_start;
-	_vehicle = (VehicleType)constrain(_sih_vtype.get(), 0, 1);
+	_vehicle = (VehicleType)constrain(_sih_vtype.get(), static_cast<typeof _sih_vtype.get()>(0),
+					  static_cast<typeof _sih_vtype.get()>(2));
+
+
+#if defined(ENABLE_LOCKSTEP_SCHEDULER)
+	lockstep_loop();
+#else
+	realtime_loop();
+#endif
 }
 
-Sih::~Sih()
+#if defined(ENABLE_LOCKSTEP_SCHEDULER)
+
+// Get current timestamp in microseconds
+uint64_t micros()
 {
-	perf_free(_loop_perf);
-	perf_free(_loop_interval_perf);
+	struct timeval t;
+	gettimeofday(&t, nullptr);
+	return t.tv_sec * ((uint64_t)1000000) + t.tv_usec;
 }
 
-bool Sih::init()
+void Sih::lockstep_loop()
 {
+
+	int rate = math::min(_imu_gyro_ratemax.get(), _imu_integration_rate.get());
+
+	// default to 400Hz (2500 us interval)
+	if (rate <= 0) {
+		rate = 400;
+	}
+
+	// 200 - 2000 Hz
+	int sim_interval_us = math::constrain(int(roundf(1e6f / rate)), 500, 5000);
+
+	float speed_factor = 1.f;
+	const char *speedup = getenv("PX4_SIM_SPEED_FACTOR");
+
+	if (speedup) {
+		speed_factor = atof(speedup);
+	}
+
+	int rt_interval_us = int(roundf(sim_interval_us / speed_factor));
+
+	PX4_INFO("Simulation loop with %d Hz (%d us sim time interval)", rate, sim_interval_us);
+	PX4_INFO("Simulation with %.1fx speedup. Loop with (%d us wall time interval)", (double)speed_factor, rt_interval_us);
+
+	if (_lockstep_component < 0) {
+		_lockstep_component = px4_lockstep_register_component();
+	}
+
+	_last_iteration_wall_time_us = micros();
+
+	while (!should_exit()) {
+		_current_simulation_time_us += sim_interval_us;
+		struct timespec ts;
+		abstime_to_ts(&ts, _current_simulation_time_us);
+		px4_clock_settime(CLOCK_MONOTONIC, &ts);
+
+		sim_step();
+
+		px4_lockstep_progress(_lockstep_component);
+
+		// Only do lock-step once we received the first actuator output
+		int sleep_time;
+
+		if (_last_actuator_output_time <= 0) {
+			PX4_DEBUG("SIH starting up - no lockstep yet");
+			sleep_time = math::max(0, sim_interval_us - (int)(micros() - _last_iteration_wall_time_us));
+
+		} else {
+			px4_lockstep_wait_for_components();
+			sleep_time = math::max(0, rt_interval_us - (int)(micros() - _last_iteration_wall_time_us));
+		}
+
+		usleep(sleep_time);
+		_last_iteration_wall_time_us = micros();
+	}
+
+	px4_lockstep_unregister_component(_lockstep_component);
+}
+#endif
+
+void Sih::realtime_loop()
+{
+
 	int rate = _imu_gyro_ratemax.get();
 
 	// default to 250 Hz (4000 us interval)
@@ -91,15 +173,29 @@ bool Sih::init()
 
 	// 200 - 2000 Hz
 	int interval_us = math::constrain(int(roundf(1e6f / rate)), 500, 5000);
-	ScheduleOnInterval(interval_us);
 
-	return true;
+	px4_sem_init(&_data_semaphore, 0, 0);
+	hrt_call_every(&_timer_call, interval_us, interval_us, timer_callback, &_data_semaphore);
+
+	while (!should_exit()) {
+		px4_sem_wait(&_data_semaphore);     // periodic real time wakeup
+		sim_step();
+	}
+
+	hrt_cancel(&_timer_call);
+	px4_sem_destroy(&_data_semaphore);
 }
 
-void Sih::Run()
+
+void Sih::timer_callback(void *sem)
+{
+	px4_sem_post((px4_sem_t *)sem);
+}
+
+void Sih::sim_step()
 {
 	perf_count(_loop_interval_perf);
-
+	perf_begin(_loop_perf);
 	// check for parameter updates
 	if (_parameter_update_sub.updated()) {
 		// clear update
@@ -110,8 +206,6 @@ void Sih::Run()
 		updateParams();
 		parameters_updated();
 	}
-
-	perf_begin(_loop_perf);
 
 	_now = hrt_absolute_time();
 	_dt = (_now - _last_run) * 1e-6f;
@@ -152,7 +246,7 @@ void Sih::Run()
 		send_gps();
 	}
 
-	if (_vehicle == VehicleType::FW && _now - _airspeed_time >= 50_ms) {
+	if ((_vehicle == VehicleType::FW || _vehicle == VehicleType::TS) && _now - _airspeed_time >= 50_ms) {
 		_airspeed_time = _now;
 		send_airspeed();
 	}
@@ -170,7 +264,6 @@ void Sih::Run()
 
 		publish_sih();  // publish _sih message for debug purpose
 	}
-
 	perf_end(_loop_perf);
 }
 
@@ -198,7 +291,8 @@ void Sih::parameters_updated()
 	_I(0, 2) = _I(2, 0) = _sih_ixz.get();
 	_I(1, 2) = _I(2, 1) = _sih_iyz.get();
 
-	_Im1 = inv(_I);
+	// guards against too small determinants
+	_Im1 = 100.0f * inv(static_cast<typeof _I>(100.0f * _I));
 
 	_mu_I = Vector3f(_sih_mu_x.get(), _sih_mu_y.get(), _sih_mu_z.get());
 
@@ -225,7 +319,9 @@ void Sih::init_variables()
 	_q = Quatf(1.0f, 0.0f, 0.0f, 0.0f);
 	_w_B = Vector3f(0.0f, 0.0f, 0.0f);
 
-	_u[0] = _u[1] = _u[2] = _u[3] = 0.0f;
+	for (int i=0; i<NB_MOTORS; i++) {
+		_u[i] = 0.0f;
+	}
 }
 
 void Sih::gps_fix()
@@ -265,8 +361,11 @@ void Sih::read_motors()
 	float pwm_middle = 0.5f * (PWM_DEFAULT_MIN + PWM_DEFAULT_MAX);
 
 	if (_actuator_out_sub.update(&actuators_out)) {
+		_last_actuator_output_time = actuators_out.timestamp;
+
 		for (int i = 0; i < NB_MOTORS; i++) { // saturate the motor signals
-			if (_vehicle == VehicleType::FW && i < 3) { // control surfaces in range [-1,1]
+			if ((_vehicle == VehicleType::FW && i < 3) || (_vehicle == VehicleType::TS
+					&& i > 3)) { // control surfaces in range [-1,1]
 				_u[i] = constrain(2.0f * (actuators_out.output[i] - pwm_middle) / (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN), -1.0f, 1.0f);
 
 			} else { // throttle signals in range [0,1]
@@ -292,22 +391,57 @@ void Sih::generate_force_and_torques()
 		_T_B = Vector3f(_T_MAX * _u[3], 0.0f, 0.0f); 	// forward thruster
 		// _Mt_B = Vector3f(_Q_MAX*_u[3], 0.0f,0.0f); 	// thruster torque
 		_Mt_B = Vector3f();
-		generate_aerodynamics();
-	}
+		generate_fw_aerodynamics();
 
+	} else if (_vehicle == VehicleType::TS) {
+		_T_B = Vector3f(0.0f, 0.0f, -_T_MAX * (_u[0] + _u[1]));
+		_Mt_B = Vector3f(_L_ROLL * _T_MAX * (_u[1] - _u[0]), 0.0f, _Q_MAX * (_u[1] - _u[0]));
+		generate_ts_aerodynamics();
+
+		// _Fa_I = -_KDV * _v_I;   // first order drag to slow down the aircraft
+		// _Ma_B = -_KDW * _w_B;   // first order angular damper
+	}
 }
 
-void Sih::generate_aerodynamics()
+void Sih::generate_fw_aerodynamics()
 {
 	_v_B = _C_IB.transpose() * _v_I; 	// velocity in body frame [m/s]
 	float altitude = _H0 - _p_I(2);
 	_wing_l.update_aero(_v_B, _w_B, altitude, _u[0]*FLAP_MAX);
 	_wing_r.update_aero(_v_B, _w_B, altitude, -_u[0]*FLAP_MAX);
-	_tailplane.update_aero(_v_B, _w_B, altitude, _u[1]*FLAP_MAX, _T_MAX*_u[3]);
-	_fin.update_aero(_v_B, _w_B, altitude, _u[2]*FLAP_MAX, _T_MAX*_u[3]);
-	_Fa_I = _C_IB * (_wing_l.get_Fa() + _wing_r.get_Fa() + _tailplane.get_Fa() + _fin.get_Fa()) - _KDV * _v_I; 	// sum of aerodynamic forces
-	// _Ma_B = wing_l.Ma + wing_r.Ma + tailplane.Ma + fin.Ma + flap_moments() -_KDW * _w_B; 	// aerodynamic moments
-	_Ma_B = _wing_l.get_Ma() + _wing_r.get_Ma() + _tailplane.get_Ma() + _fin.get_Ma() - _KDW * _w_B; 	// aerodynamic moments
+	_tailplane.update_aero(_v_B, _w_B, altitude, _u[1]*FLAP_MAX, _T_MAX * _u[3]);
+	_fin.update_aero(_v_B, _w_B, altitude, _u[2]*FLAP_MAX, _T_MAX * _u[3]);
+	_fuselage.update_aero(_v_B, _w_B, altitude);
+	_Fa_I = _C_IB * (_wing_l.get_Fa() + _wing_r.get_Fa() + _tailplane.get_Fa() + _fin.get_Fa() + _fuselage.get_Fa())
+		- _KDV * _v_I; 	// sum of aerodynamic forces
+	_Ma_B = _wing_l.get_Ma() + _wing_r.get_Ma() + _tailplane.get_Ma() + _fin.get_Ma() + _fuselage.get_Ma() - _KDW *
+		_w_B; 	// aerodynamic moments
+}
+
+void Sih::generate_ts_aerodynamics()
+{
+	_v_B = _C_IB.transpose() * _v_I; // velocity in body frame [m/s]
+	Vector3f Fa_ts = Vector3f();
+	Vector3f Ma_ts = Vector3f();
+	Vector3f v_ts = _C_BS.transpose() *
+			_v_B; // the aerodynamic is resolved in a frame like a standard aircraft (nose-right-belly)
+	Vector3f w_ts = _C_BS.transpose() * _w_B;
+	float altitude = _H0 - _p_I(2);
+
+	for (int i = 0; i < NB_TS_SEG; i++) {
+		if (i <= NB_TS_SEG / 2) {
+			_ts[i].update_aero(v_ts, w_ts, altitude, _u[5]*TS_DEF_MAX, _T_MAX * _u[1]);
+
+		} else {
+			_ts[i].update_aero(v_ts, w_ts, altitude, -_u[4]*TS_DEF_MAX, _T_MAX * _u[0]);
+		}
+
+		Fa_ts += _ts[i].get_Fa();
+		Ma_ts += _ts[i].get_Ma();
+	}
+
+	_Fa_I = _C_IB * _C_BS * Fa_ts - _KDV * _v_I; 	// sum of aerodynamic forces
+	_Ma_B = _C_BS * Ma_ts - _KDW * _w_B; 	// aerodynamic moments
 }
 
 // apply the equations of motion of a rigid body and integrate one step
@@ -324,7 +458,7 @@ void Sih::equations_of_motion()
 
 	// fake ground, avoid free fall
 	if (_p_I(2) > 0.0f && (_v_I_dot(2) > 0.0f || _v_I(2) > 0.0f)) {
-		if (_vehicle == VehicleType::MC) {
+		if (_vehicle == VehicleType::MC || _vehicle == VehicleType::TS) {
 			if (!_grounded) {    // if we just hit the floor
 				// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
 				_v_I_dot = -_v_I / _dt;
@@ -352,7 +486,7 @@ void Sih::equations_of_motion()
 			_v_I = _v_I + _v_I_dot * _dt;
 			Eulerf RPY = Eulerf(_q);
 			RPY(0) = 0.0f;	// no roll
-			RPY(1) = radians(0.0f); 	// pitch slightly up to get some lift
+			RPY(1) = radians(0.0f); // pitch slightly up if needed to get some lift
 			_q = Quatf(RPY);
 			_w_B.setZero();
 			_grounded = true;
@@ -362,7 +496,7 @@ void Sih::equations_of_motion()
 		// integration: Euler forward
 		_p_I = _p_I + _p_I_dot * _dt;
 		_v_I = _v_I + _v_I_dot * _dt;
-		_q = _q * _dq; // as given in attitude_estimator_q_main.cpp
+		_q = _q * _dq;
 		_q.normalize();
 		// integration Runge-Kutta 4
 		// rk4_update(_p_I, _v_I, _q, _w_B);
@@ -516,22 +650,6 @@ void Sih::publish_sih()
 	_gpos_gt_pub.publish(_gpos_gt);
 }
 
-// quaternion exponential as defined in [3]
-Quatf Sih::expq(const matrix::Vector3f& u)
-{
-	float u_norm = u.norm();
-	Vector3f v;
-
-	if (u_norm < 1.0e-6f) { 	// error will be smaller than 1e-18
-		v = (1.0f - u_norm * u_norm / 6.0f) * u; 	// first taylor serie term of sin(x)/x
-
-	} else {
-		v = sinf(u_norm) / u_norm * u;
-	}
-
-	return Quatf(cosf(u_norm), v(0), v(1), v(2));
-}
-
 float Sih::generate_wgn()   // generate white Gaussian noise sample with std=1
 {
 	// algorithm 1:
@@ -544,8 +662,8 @@ float Sih::generate_wgn()   // generate white Gaussian noise sample with std=1
 
 	if (phase) {
 		do {
-			float U1 = (float)rand() / RAND_MAX;
-			float U2 = (float)rand() / RAND_MAX;
+			float U1 = (float)rand() / (float)RAND_MAX;
+			float U2 = (float)rand() / (float)RAND_MAX;
 			V1 = 2.0f * U1 - 1.0f;
 			V2 = 2.0f * U2 - 1.0f;
 			S = V1 * V1 + V2 * V2;
@@ -567,13 +685,88 @@ Vector3f Sih::noiseGauss3f(float stdx, float stdy, float stdz)
 	return Vector3f(generate_wgn() * stdx, generate_wgn() * stdy, generate_wgn() * stdz);
 }
 
+/**
+ * Computes the quaternion exponential of the 3D vector u
+ * as proposed in
+ * [1] Sveier A, Sjøberg AM, Egeland O. "Applied Runge–Kutta–Munthe-Kaas Integration
+ *     for the Quaternion Kinematics".Journal of Guidance, Control, and Dynamics. 2019
+ *
+ * return a quaternion computed as
+ * expq(u)=[cos||u||, sinc||u||*u]
+ * sinc(x)=sin(x)/x in the sin cardinal function
+ *
+ * This can be used to update a quaternion from the body rates
+ * rather than using
+ * qk+1=qk+qk.derivative1(wb)*dt
+ * we can use
+ * qk+1=qk*expq(dt*wb/2)
+ * which is a more robust update.
+ * A re-normalization step might necessary with both methods.
+ *
+ * @param u 3D vector u
+ */
+Quatf Sih::expq(const Vector3f &u)
+{
+static const float tol = (0.2f);            // ensures an error < 10^-10
+static const float c2 = (1.0f / 2.0f);      // 1 / 2!
+static const float c3 = (1.0f / 6.0f);      // 1 / 3!
+static const float c4 = (1.0f / 24.0f);     // 1 / 4!
+static const float c5 = (1.0f / 120.0f);    // 1 / 5!
+static const float c6 = (1.0f / 720.0f);    // 1 / 6!
+static const float c7 = (1.0f / 5040.0f);   // 1 / 7!
+
+	float u_norm = u.norm();
+	float sinc_u, cos_u;
+
+	if (u_norm < tol) {
+		float u2 = u_norm * u_norm;
+		float u4 = u2 * u2;
+		float u6 = u4 * u2;
+
+		// compute the first 4 terms of the Taylor serie
+		sinc_u = 1.0f - u2 * c3 + u4 * c5 - u6 * c7;
+		cos_u = 1.0f - u2 * c2 + u4 * c4 - u6 * c6;
+	} else {
+		sinc_u = sinf(u_norm) / u_norm;
+		cos_u = cosf(u_norm);
+	}
+	Vector3f v = sinc_u * u;
+	return Quatf (cos_u, v(0), v(1), v(2));
+}
+
+/** inverse right Jacobian of the quaternion logarithm u
+ * equation (20) in reference
+ * [1] Sveier A, Sjøberg AM, Egeland O. "Applied Runge–Kutta–Munthe-Kaas Integration
+ *     for the Quaternion Kinematics".Journal of Guidance, Control, and Dynamics. 2019
+ *
+ * This can be used to update a quaternion kinematic cleanly
+ * with higher order integration methods (like RK4) on the quaternion logarithm u.
+ *
+ * @param u 3D vector u
+ */
+Dcmf Sih::inv_r_jacobian (const Vector3f &u)
+{
+	static const float tol = 1.0e-4f;
+	float u_norm = u.norm();
+	Dcmf u_hat = u.hat();
+
+	if (u_norm < tol) { 	// result smaller than O(||.||^3)
+		return 0.5f * (Dcmf() + u_hat + (1.0f / 3.0f + u_norm * u_norm / 45.0f) * u_hat * u_hat);
+	} else {
+		return 0.5f * (Dcmf() + u_hat + (1.0f - u_norm * cosf(u_norm) / sinf(u_norm)) / (u_norm * u_norm) * u_hat * u_hat);
+	}
+}
+
 int Sih::print_status()
 {
 	if (_vehicle == VehicleType::MC) {
-		PX4_INFO("Running MC");
+		PX4_INFO("Running MultiCopter");
 
-	} else {
-		PX4_INFO("Running FW");
+	} else if (_vehicle == VehicleType::FW) {
+		PX4_INFO("Running Fixed-Wing");
+
+	} else if (_vehicle == VehicleType::TS) {
+		PX4_INFO("Running TailSitter");
 	}
 
 	PX4_INFO("vehicle landed: %d", _grounded);
@@ -593,32 +786,40 @@ int Sih::print_status()
 	_Fa_I.print();
 	PX4_INFO("Aerodynamic moments body frame (Nm)");
 	_Ma_B.print();
-	PX4_INFO("v_I.z: %f", (double)_v_I(2));
-	PX4_INFO("v_I_dot.z: %f", (double)_v_I_dot(2));
+	PX4_INFO("Thruster force in body frame (N)");
+	_T_B.print();
+	PX4_INFO("Thruster moments in body frame (Nm)");
+	_Mt_B.print();
 	return 0;
 }
 
+
 int Sih::task_spawn(int argc, char *argv[])
+{
+	_task_id = px4_task_spawn_cmd("sih",
+				      SCHED_DEFAULT,
+				      SCHED_PRIORITY_MAX,
+				      1024,
+				      (px4_main_t)&run_trampoline,
+				      (char *const *)argv);
+
+	if (_task_id < 0) {
+		_task_id = -1;
+		return -errno;
+	}
+
+	return 0;
+}
+
+Sih *Sih::instantiate(int argc, char *argv[])
 {
 	Sih *instance = new Sih();
 
-	if (instance) {
-		_object.store(instance);
-		_task_id = task_id_is_work_queue;
-
-		if (instance->init()) {
-			return PX4_OK;
-		}
-
-	} else {
+	if (instance == nullptr) {
 		PX4_ERR("alloc failed");
 	}
 
-	delete instance;
-	_object.store(nullptr);
-	_task_id = -1;
-
-	return PX4_ERROR;
+	return instance;
 }
 
 int Sih::custom_command(int argc, char *argv[])
@@ -635,7 +836,7 @@ int Sih::print_usage(const char *reason)
 	PRINT_MODULE_DESCRIPTION(
 		R"DESCR_STR(
 ### Description
-This module provide a simulator for quadrotors running fully
+This module provide a simulator for quadrotors and fixed-wings running fully
 inside the hardware autopilot.
 
 This simulator subscribes to "actuator_outputs" which are the actuator pwm

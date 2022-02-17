@@ -90,6 +90,7 @@ set(viewers
 	none
 	jmavsim
 	gazebo
+	sih_sim
 )
 
 set(debuggers
@@ -102,6 +103,7 @@ set(debuggers
 
 set(models
 	none
+	airplane
 	boat
 	cloudship
 	if750a
@@ -121,6 +123,7 @@ set(models
 	plane_catapult
 	plane_lidar
 	px4vision
+	quadx
 	r1_rover
 	rover
 	shell
@@ -133,6 +136,7 @@ set(models
 	typhoon_h480
 	uuv_bluerov2_heavy
 	uuv_hippocampus
+	xvert
 )
 
 set(worlds
