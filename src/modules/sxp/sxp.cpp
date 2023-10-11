@@ -64,19 +64,19 @@ Sxp::~Sxp()
 
 void Sxp::run()
 {
-	_px4_accel.set_temperature(T1_C);
-	_px4_gyro.set_temperature(T1_C);
-	_px4_mag.set_temperature(T1_C);
+	// _px4_accel.set_temperature(T1_C);
+	// _px4_gyro.set_temperature(T1_C);
+	// _px4_mag.set_temperature(T1_C);
 
 	parameters_updated();
 	init_variables();
 	// gps_no_fix();
 
 	// const hrt_abstime task_start = hrt_absolute_time();
-	// _last_run = task_start;
+	_last_run = hrt_absolute_time();
 	// _gps_time = task_start;
 	// _airspeed_time = task_start;
-	// _gt_time = task_start;
+	// _time = task_start;
 	// _dist_snsr_time = task_start;
 	_vehicle = (VehicleType)constrain(_sih_vtype.get(), static_cast<typeof _sih_vtype.get()>(0),
 					  static_cast<typeof _sih_vtype.get()>(2));
@@ -110,6 +110,7 @@ void Sxp::realtime_loop()
 		perf_begin(_loop_perf);
 		perf_count(_loop_interval_perf);
 		read_motors();
+		publish_sxp();
 		perf_end(_loop_perf);
 	}
 
@@ -178,10 +179,6 @@ void Sxp::read_motors()
 	// [Elevator, Aileron, Rudder, Throttle, Gear, Flaps, Speed Brakes]
 	int size = 4;
 	_sendCTRLres = sendCTRL(_xpc_sock, command, size, 0);
-
-	// [Lat, Lon, Alt, Pitch, Roll, Yaw, Gear]
-	_getPOSIres = getPOSI(_xpc_sock, _v_states, 0);
-
 }
 
 // generate the motors thrust and torque in the body frame
@@ -357,32 +354,43 @@ void Sxp::reconstruct_sensors_signals()
 // 	_distance_snsr_pub.publish(_distance_snsr);
 // }
 
-void Sxp::publish_sih()
+void Sxp::publish_sxp()
 {
+	_now = hrt_absolute_time();
+	_dt = (_now - _last_run) * 1e-6f;
+	if (_dt < 1.0e-5f) {
+		return;
+	}
+	_last_run = _now;
+
+	// [Lat, Lon, Alt, Pitch, Roll, Yaw, Gear]
+	_getPOSIres = getPOSI(_xpc_sock, _v_states, 0);
+
+	// publish attitude
+	_att.timestamp = hrt_absolute_time();
+	_rpy = matrix::Eulerf(radians(_v_states[4]), radians(_v_states[3]), radians(_v_states[5]));
+	Quatf q = matrix::Quatf(_rpy);
+	q.copyTo(_att.q);
+	_att_pub.publish(_att);
+
+	// compute the angular rates
+	Eulerf _rpy_dot = (_rpy - _rpy_old) / _dt;
+	_rpy_old = _rpy;
+	_w_B = _rpy_dot;	// methode bourrin
+
 	// publish angular velocity groundtruth
-	_vehicle_angular_velocity_gt.timestamp = hrt_absolute_time();
-	_vehicle_angular_velocity_gt.xyz[0] = _w_B(0); // rollspeed;
-	_vehicle_angular_velocity_gt.xyz[1] = _w_B(1); // pitchspeed;
-	_vehicle_angular_velocity_gt.xyz[2] = _w_B(2); // yawspeed;
+	_vehicle_angular_velocity.timestamp = hrt_absolute_time();
+	_vehicle_angular_velocity.xyz[0] = _w_B(0); // rollspeed;
+	_vehicle_angular_velocity.xyz[1] = _w_B(1); // pitchspeed;
+	_vehicle_angular_velocity.xyz[2] = _w_B(2); // yawspeed;
+	_vehicle_angular_velocity_pub.publish(_vehicle_angular_velocity);
 
-	_vehicle_angular_velocity_gt_pub.publish(_vehicle_angular_velocity_gt);
-
-	// publish attitude groundtruth
-	_att_gt.timestamp = hrt_absolute_time();
-	_att_gt.q[0] = _q(0);
-	_att_gt.q[1] = _q(1);
-	_att_gt.q[2] = _q(2);
-	_att_gt.q[3] = _q(3);
-
-	_att_gt_pub.publish(_att_gt);
-
-	// publish position groundtruth
-	_gpos_gt.timestamp = hrt_absolute_time();
-	// _gpos_gt.lat = _gps_lat_noiseless;
-	// _gpos_gt.lon = _gps_lon_noiseless;
-	// _gpos_gt.alt = _gps_alt_noiseless;
-
-	_gpos_gt_pub.publish(_gpos_gt);
+	// publish the global position
+	_gpos.timestamp = hrt_absolute_time();
+	_gpos.lat = _v_states[0];
+	_gpos.lon = _v_states[1];
+	_gpos.alt = (float)_v_states[2];
+	_gpos_pub.publish(_gpos);
 }
 
 
@@ -393,6 +401,8 @@ int Sxp::print_status()
 
 	// PX4_INFO("vehicle landed: %d", _grounded);
 	PX4_INFO("dt [us]: %d", (int)(_dt * 1e6f));
+	PX4_INFO("xpc socket.port: %d, xpc socket.xpPort: %d, xpc socket.sock: %d", (int)_xpc_sock.port, (int)_xpc_sock.xpPort, _xpc_sock.sock);
+	PX4_INFO("send control res: %d, get posi res: %d", _sendCTRLres, _getPOSIres);
 	PX4_INFO("inertial position NED (m)");
 	_p_I.print();
 	PX4_INFO("inertial velocity NED (m/s)");

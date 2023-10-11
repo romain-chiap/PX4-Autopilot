@@ -63,21 +63,18 @@
 #include <conversion/rotation.h>    // math::radians,
 #include <lib/geo/geo.h>        // to get the physical constants
 #include <drivers/drv_hrt.h>        // to get the real time
-#include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
-#include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
-#include <lib/drivers/magnetometer/PX4Magnetometer.hpp>
 #include <perf/perf_counter.h>
 #include <uORB/Publication.hpp>
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionInterval.hpp>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/actuator_outputs.h>
-#include <uORB/topics/sensor_gps.h>
-#include <uORB/topics/sensor_baro.h>
+// #include <uORB/topics/sensor_gps.h>
+// #include <uORB/topics/sensor_baro.h>
 #include <uORB/topics/vehicle_angular_velocity.h>   // to publish groundtruth
 #include <uORB/topics/vehicle_attitude.h>           // to publish groundtruth
 #include <uORB/topics/vehicle_global_position.h>    // to publish groundtruth
-#include <uORB/topics/distance_sensor.h>
+// #include <uORB/topics/distance_sensor.h>
 #include <uORB/topics/airspeed.h>
 
 # include "xplaneConnect.h"
@@ -126,35 +123,22 @@ private:
 	int 	_sendCTRLres=-1;
 	int 	_getPOSIres=-1;
 	double _v_states[7]={};
+	matrix::Eulerf _rpy = {};
+	matrix::Eulerf _rpy_old = {};
 
 	void parameters_updated();
 
-	// simulated sensor instances
-	PX4Accelerometer _px4_accel{1310988}; // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
-	PX4Gyroscope     _px4_gyro{1310988};  // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
-	PX4Magnetometer  _px4_mag{197388};    //  197388: DRV_MAG_DEVTYPE_MAGSIM, BUS: 3, ADDR: 1, TYPE: SIMULATION
+	// angular velocity
+	vehicle_angular_velocity_s			_vehicle_angular_velocity{};
+	uORB::Publication<vehicle_angular_velocity_s>	_vehicle_angular_velocity_pub{ORB_ID(vehicle_angular_velocity)};
 
-	uORB::PublicationMulti<sensor_baro_s> _sensor_baro_pub{ORB_ID(sensor_baro)};
+	// attitude
+	vehicle_attitude_s				_att{};
+	uORB::Publication<vehicle_attitude_s>		_att_pub{ORB_ID(vehicle_attitude)};
 
-	// to publish the gps position
-	sensor_gps_s			_sensor_gps{};
-	uORB::Publication<sensor_gps_s>	_sensor_gps_pub{ORB_ID(sensor_gps)};
-
-	// to publish the distance sensor
-	distance_sensor_s                    _distance_snsr{};
-	uORB::Publication<distance_sensor_s> _distance_snsr_pub{ORB_ID(distance_sensor)};
-
-	// angular velocity groundtruth
-	vehicle_angular_velocity_s			_vehicle_angular_velocity_gt{};
-	uORB::Publication<vehicle_angular_velocity_s>	_vehicle_angular_velocity_gt_pub{ORB_ID(vehicle_angular_velocity_groundtruth)};
-
-	// attitude groundtruth
-	vehicle_attitude_s				_att_gt{};
-	uORB::Publication<vehicle_attitude_s>		_att_gt_pub{ORB_ID(vehicle_attitude_groundtruth)};
-
-	// global position groundtruth
-	vehicle_global_position_s			_gpos_gt{};
-	uORB::Publication<vehicle_global_position_s>	_gpos_gt_pub{ORB_ID(vehicle_global_position_groundtruth)};
+	// global position
+	vehicle_global_position_s			_gpos{};
+	uORB::Publication<vehicle_global_position_s>	_gpos_pub{ORB_ID(vehicle_global_position)};
 
 	// airspeed
 	uORB::Publication<airspeed_s>				_airspeed_pub{ORB_ID(airspeed)};
@@ -164,15 +148,6 @@ private:
 
 	// hard constants
 	static constexpr uint16_t NB_MOTORS = 6;
-	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
-	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
-	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
-	// Aerodynamic coefficients
-	static constexpr float RHO = 1.225f; 		// air density at sea level [kg/m^3]
-	static constexpr float SPAN = 0.86f; 	// wing span [m]
-	static constexpr float MAC = 0.21f; 	// wing mean aerodynamic chord [m]
-	static constexpr float RP = 0.1f; 	// radius of the propeller [m]
-	static constexpr float FLAP_MAX = M_PI_F / 12.0f; // 15 deg, maximum control surface deflection
 
 	void init_variables();
 	void read_motors();
@@ -182,7 +157,7 @@ private:
 	void send_gps();
 	void send_airspeed();
 	void send_dist_snsr();
-	void publish_sih();
+	void publish_sxp();
 
 	void realtime_loop();
 	px4_sem_t       _data_semaphore;
@@ -191,7 +166,7 @@ private:
 	perf_counter_t  _loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 	perf_counter_t  _loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")};
 
-	// hrt_abstime _last_run{0};
+	hrt_abstime _last_run{0};
 	hrt_abstime _last_actuator_output_time{0};
 	// hrt_abstime _baro_time{0};
 	// hrt_abstime _gps_time{0};
