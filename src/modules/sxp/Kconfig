@@ -1,0 +1,12 @@
+menuconfig MODULES_SXP
+	bool "sxp"
+	default n
+	---help---
+		Enable support for sxp
+
+menuconfig USER_SIH
+	bool "sxp running as userspace module"
+	default y
+	depends on BOARD_PROTECTED && MODULES_SIH
+	---help---
+		Put sxp in userspace memory
