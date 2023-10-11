@@ -74,7 +74,7 @@
 #include <uORB/topics/vehicle_angular_velocity.h>   // to publish groundtruth
 #include <uORB/topics/vehicle_attitude.h>           // to publish groundtruth
 #include <uORB/topics/vehicle_global_position.h>    // to publish groundtruth
-// #include <uORB/topics/distance_sensor.h>
+#include <uORB/topics/estimator_status.h>
 #include <uORB/topics/airspeed.h>
 
 # include "xplaneConnect.h"
@@ -139,6 +139,9 @@ private:
 	// global position
 	vehicle_global_position_s			_gpos{};
 	uORB::Publication<vehicle_global_position_s>	_gpos_pub{ORB_ID(vehicle_global_position)};
+
+	estimator_status_s 				_estim_s{};
+	uORB::Publication<estimator_status_s>		_estim_s_pub{ORB_ID(estimator_status)};
 
 	// airspeed
 	uORB::Publication<airspeed_s>				_airspeed_pub{ORB_ID(airspeed)};

@@ -397,6 +397,26 @@ void Sxp::publish_sxp()
 	_gpos.lon = _v_states[1];
 	_gpos.alt = (float)_v_states[2];
 	_gpos_pub.publish(_gpos);
+
+	// publish the estimator status
+	_estim_s.timestamp_sample = hrt_absolute_time();
+	_estim_s.timestamp = hrt_absolute_time();
+	_estim_s.output_tracking_error[0]=0.0019f;
+	_estim_s.output_tracking_error[1]=0.0106f;
+	_estim_s.output_tracking_error[2]=0.0229f;
+	_estim_s.control_mode_flags = 2147484183;
+	_estim_s.pos_horiz_accuracy = 0.2048f;
+	_estim_s.pos_vert_accuracy = 0.3553f;
+	_estim_s.mag_test_ratio = 0.2860f;
+	_estim_s.vel_test_ratio = 0.0338f;
+	_estim_s.pos_test_ratio = 0.0644f;
+	_estim_s.hgt_test_ratio = 0.0059f;
+	_estim_s.accel_device_id = 1310988;
+	_estim_s.gyro_device_id = 1310988;
+	_estim_s.baro_device_id = 6620172;
+	_estim_s.mag_device_id = 197388;
+	_estim_s.solution_status_flags = 895;
+	_estim_s_pub.publish(_estim_s);
 }
 
 
