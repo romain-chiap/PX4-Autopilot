@@ -78,8 +78,8 @@ if [ "$model" == "" ] || [ "$model" == "none" ]; then
 		echo "empty model, setting quadx as default for sihsim"
 		model="quadx"
 	elif [ "$program" == "sxpsim" ]; then
-		echo "empty model, setting airplane as default for sxpsim"
-		model="airplane"
+		echo "empty model, setting cessna as default for sxpsim"
+		model="cessna"
 	else
 		echo "empty model, setting iris as default"
 		model="iris"
@@ -228,8 +228,8 @@ elif [ "$program" == "sihsim" ] && [ ! -n "$no_sim" ]; then
 	fi
 elif [ "$program" == "sxpsim" ] && [ ! -n "$no_sim" ]; then
 	export SIM_MODE="sxpsim"
-	if [ "$model" != "airplane" ]; then
-		echo "Model ${model} not compatible with with sxp. sxp supports [airplane]."
+	if [ "$model" != "cessna" ]; then
+		echo "Model ${model} not compatible with with sxp. sxp supports [cessna]."
 		exit 1
 	fi
 fi

@@ -391,7 +391,7 @@ endforeach()
 # create targets for sxpsim
 set(models_sxp
 	none
-	airplane
+	cessna
 )
 
 set(worlds_sxp
