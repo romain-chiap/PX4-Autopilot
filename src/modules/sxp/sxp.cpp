@@ -376,7 +376,13 @@ void Sxp::publish_sxp()
 	// compute the angular rates
 	Eulerf _rpy_dot = (_rpy - _rpy_old) / _dt;
 	_rpy_old = _rpy;
-	_w_B = _rpy_dot;	// methode bourrin
+	float S_[3][3] = {
+		{1, 0, -sinf(_rpy.theta())},
+		{0, cosf(_rpy.phi()), sinf(_rpy.phi())*cosf(_rpy.theta())},
+		{0, -sinf(_rpy.phi()), cosf(_rpy.phi())*cosf(_rpy.theta())}
+	};
+	Matrix3f S = Matrix3f(S_);
+	_w_B = S*_rpy_dot;	// correct transformation
 
 	// publish angular velocity groundtruth
 	_vehicle_angular_velocity.timestamp = hrt_absolute_time();
