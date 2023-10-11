@@ -208,6 +208,9 @@ dataman start
 if [ "$SIM_MODE" = "sihsim" ]; then
 	sih start
 # only start the simulator if not in replay mode, as both control the lockstep time
+elif [ "$SIM_MODE" = "sxpsim" ]; then
+	sxp start
+# only start the simulator if not in replay mode, as both control the lockstep time
 elif ! replay tryapplyparams
 then
   . px4-rc.simulator

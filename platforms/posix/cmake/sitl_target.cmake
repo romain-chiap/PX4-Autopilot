@@ -388,6 +388,68 @@ foreach(debugger ${debuggers})
 	endforeach()
 endforeach()
 
+# create targets for sxpsim
+set(models_sxp
+	none
+	airplane
+)
+
+set(worlds_sxp
+	none
+)
+
+foreach(debugger ${debuggers})
+	foreach(model ${models_sxp})
+		foreach(world ${worlds_sxp})
+			if(world STREQUAL "none")
+				if(debugger STREQUAL "none")
+					if(model STREQUAL "none")
+						set(_targ_name "sxpsim")
+					else()
+						set(_targ_name "sxpsim_${model}")
+					endif()
+				else()
+					if(model STREQUAL "none")
+						set(_targ_name "sxpsim__${debugger}_${world}")
+					else()
+						set(_targ_name "sxpsim_${model}_${debugger}_${world}")
+					endif()
+				endif()
+
+				add_custom_target(${_targ_name}
+					COMMAND ${PX4_SOURCE_DIR}/Tools/sitl_run.sh $<TARGET_FILE:px4> ${debugger} sxpsim ${model} ${world} ${PX4_SOURCE_DIR} ${PX4_BINARY_DIR}
+					WORKING_DIRECTORY ${SITL_WORKING_DIR}
+					USES_TERMINAL
+					DEPENDS logs_symlink
+				)
+				list(APPEND all_posix_vmd_make_targets ${_targ_name})
+			else()
+				if(debugger STREQUAL "none")
+					if(model STREQUAL "none")
+						set(_targ_name "sxpsim___${world}")
+					else()
+						set(_targ_name "sxpsim_${model}__${world}")
+					endif()
+				else()
+					if(model STREQUAL "none")
+						set(_targ_name "sxpsim___${debugger}_${world}")
+					else()
+						set(_targ_name "sxpsim_${model}_${debugger}_${world}")
+					endif()
+				endif()
+
+				add_custom_target(${_targ_name}
+					COMMAND ${PX4_SOURCE_DIR}/Tools/sitl_run.sh $<TARGET_FILE:px4> ${debugger} sxpsim ${model} ${world} ${PX4_SOURCE_DIR} ${PX4_BINARY_DIR}
+					WORKING_DIRECTORY ${SITL_WORKING_DIR}
+					USES_TERMINAL
+					DEPENDS logs_symlink
+				)
+				list(APPEND all_posix_vmd_make_targets ${_targ_name})
+			endif()
+		endforeach()
+	endforeach()
+endforeach()
+
 # add flighgear targets
 if(ENABLE_LOCKSTEP_SCHEDULER STREQUAL "no")
 	set(models
