@@ -22,9 +22,6 @@
 //    TO THE EXTENT PERMITTED BY LAW.  RECIPIENT'S SOLE REMEDY FOR ANY SUCH MATTER SHALL BE THE
 //    IMMEDIATE, UNILATERAL TERMINATION OF THIS AGREEMENT.
 
-// #define ENABLE_LOCKSTEP_SCHEDULER
-#if defined(ENABLE_LOCKSTEP_SCHEDULER)
-
 #ifndef xplaneConnect_h
 #define xplaneConnect_h
 
@@ -318,4 +315,4 @@ int sendCOMM(XPCSocket sock, const char* comm);
     }
 #endif
 #endif
-#endif
+

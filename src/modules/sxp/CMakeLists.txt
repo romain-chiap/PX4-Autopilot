@@ -37,14 +37,10 @@ px4_add_module(
 	COMPILE_FLAGS
 		${MAX_CUSTOM_OPT_LEVEL}
 	SRCS
-		aero.hpp
 		sxp.cpp
 		sxp.hpp
 		xplaneConnect.c
 		xplaneConnect.h
 	DEPENDS
 		mathlib
-		drivers_accelerometer
-		drivers_gyroscope
-		drivers_magnetometer
 	)

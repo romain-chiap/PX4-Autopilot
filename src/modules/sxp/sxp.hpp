@@ -120,6 +120,13 @@ public:
 	static void timer_callback(void *sem);
 
 private:
+
+	// variables for Xplane connect
+	XPCSocket _xpc_sock;
+	int 	_sendCTRLres=-1;
+	int 	_getPOSIres=-1;
+	double _v_states[7]={};
+
 	void parameters_updated();
 
 	// simulated sensor instances
@@ -168,8 +175,6 @@ private:
 	static constexpr float FLAP_MAX = M_PI_F / 12.0f; // 15 deg, maximum control surface deflection
 
 	void init_variables();
-	void gps_fix();
-	void gps_no_fix();
 	void read_motors();
 	void generate_force_and_torques();
 	void equations_of_motion();
@@ -178,9 +183,6 @@ private:
 	void send_airspeed();
 	void send_dist_snsr();
 	void publish_sih();
-	void generate_fw_aerodynamics();
-	void generate_ts_aerodynamics();
-	void sensor_step();
 
 	void realtime_loop();
 	px4_sem_t       _data_semaphore;
@@ -189,17 +191,17 @@ private:
 	perf_counter_t  _loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 	perf_counter_t  _loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")};
 
-	hrt_abstime _last_run{0};
+	// hrt_abstime _last_run{0};
 	hrt_abstime _last_actuator_output_time{0};
-	hrt_abstime _baro_time{0};
-	hrt_abstime _gps_time{0};
-	hrt_abstime _airspeed_time{0};
-	hrt_abstime _mag_time{0};
-	hrt_abstime _gt_time{0};
-	hrt_abstime _dist_snsr_time{0};
+	// hrt_abstime _baro_time{0};
+	// hrt_abstime _gps_time{0};
+	// hrt_abstime _airspeed_time{0};
+	// hrt_abstime _mag_time{0};
+	// hrt_abstime _gt_time{0};
+	// hrt_abstime _dist_snsr_time{0};
 	hrt_abstime _now{0};
 	float       _dt{0};         // sampling time [s]
-	bool        _grounded{true};// whether the vehicle is on the ground
+	// bool        _grounded{true};// whether the vehicle is on the ground
 
 	matrix::Vector3f    _T_B;           // thrust force in body frame [N]
 	matrix::Vector3f    _Fa_I;          // aerodynamic force in inertial frame [N]
@@ -218,106 +220,39 @@ private:
 	float       _u[NB_MOTORS];          // thruster signals
 
 	enum class VehicleType {MC, FW, TS};
-	VehicleType _vehicle = VehicleType::MC;
-
-	// aerodynamic segments for the fixedwing
-	AeroSeg _wing_l = AeroSeg(SPAN / 2.0f, MAC, -4.0f, matrix::Vector3f(0.0f, -SPAN / 4.0f, 0.0f), 3.0f,
-				  SPAN / MAC, MAC / 3.0f);
-	AeroSeg _wing_r = AeroSeg(SPAN / 2.0f, MAC, -4.0f, matrix::Vector3f(0.0f, SPAN / 4.0f, 0.0f), -3.0f,
-				  SPAN / MAC, MAC / 3.0f);
-	AeroSeg _tailplane = AeroSeg(0.3f, 0.1f, 0.0f, matrix::Vector3f(-0.4f, 0.0f, 0.0f), 0.0f, -1.0f, 0.05f, RP);
-	AeroSeg _fin = AeroSeg(0.25, 0.18, 0.0f, matrix::Vector3f(-0.45f, 0.0f, -0.1f), -90.0f, -1.0f, 0.12f, RP);
-	AeroSeg _fuselage = AeroSeg(0.2, 0.8, 0.0f, matrix::Vector3f(0.0f, 0.0f, 0.0f), -90.0f);
-
-	// aerodynamic segments for the tailsitter
-	static constexpr const int NB_TS_SEG = 11;
-	static constexpr const float TS_AR = 3.13f;
-	static constexpr const float TS_CM = 0.115f;	// longitudinal position of the CM from trailing edge
-	static constexpr const float TS_RP = 0.0625f;	// propeller radius [m]
-	static constexpr const float TS_DEF_MAX = math::radians(39.0f); 	// max deflection
-	matrix::Dcmf _C_BS = matrix::Dcmf(matrix::Eulerf(0.0f, math::radians(90.0f), 0.0f)); // segment to body 90 deg pitch
-	AeroSeg _ts[NB_TS_SEG] = {
-		AeroSeg(0.0225f, 0.110f, 0.0f, matrix::Vector3f(0.083f - TS_CM, -0.239f, 0.0f), 0.0f, TS_AR),
-		AeroSeg(0.0383f, 0.125f, 0.0f, matrix::Vector3f(0.094f - TS_CM, -0.208f, 0.0f), 0.0f, TS_AR, 0.063f),
-		// AeroSeg(0.0884f, 0.148f, 0.0f, matrix::Vector3f(0.111f-TS_CM, -0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
-		AeroSeg(0.0884f, 0.085f, 0.0f, matrix::Vector3f(0.158f - TS_CM, -0.143f, 0.0f), 0.0f, TS_AR),
-		AeroSeg(0.0884f, 0.063f, 0.0f, matrix::Vector3f(0.047f - TS_CM, -0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
-		AeroSeg(0.0633f, 0.176f, 0.0f, matrix::Vector3f(0.132f - TS_CM, -0.068f, 0.0f), 0.0f, TS_AR, 0.063f),
-		AeroSeg(0.0750f, 0.231f, 0.0f, matrix::Vector3f(0.173f - TS_CM,  0.000f, 0.0f), 0.0f, TS_AR),
-		AeroSeg(0.0633f, 0.176f, 0.0f, matrix::Vector3f(0.132f - TS_CM,  0.068f, 0.0f), 0.0f, TS_AR, 0.063f),
-		// AeroSeg(0.0884f, 0.148f, 0.0f, matrix::Vector3f(0.111f-TS_CM,  0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
-		AeroSeg(0.0884f, 0.085f, 0.0f, matrix::Vector3f(0.158f - TS_CM,  0.143f, 0.0f), 0.0f, TS_AR),
-		AeroSeg(0.0884f, 0.063f, 0.0f, matrix::Vector3f(0.047f - TS_CM,  0.143f, 0.0f), 0.0f, TS_AR, 0.063f, TS_RP),
-		AeroSeg(0.0383f, 0.125f, 0.0f, matrix::Vector3f(0.094f - TS_CM,  0.208f, 0.0f), 0.0f, TS_AR, 0.063f),
-		AeroSeg(0.0225f, 0.110f, 0.0f, matrix::Vector3f(0.083f - TS_CM,  0.239f, 0.0f), 0.0f, TS_AR)
-	};
-
-	// AeroSeg _ts[NB_TS_SEG] = {
-	// 	AeroSeg(0.0225f, 0.110f, -90.0f, matrix::Vector3f(0.0f, -0.239f, TS_CM-0.083f), 0.0f, TS_AR),
-	// 	AeroSeg(0.0383f, 0.125f, -90.0f, matrix::Vector3f(0.0f, -0.208f, TS_CM-0.094f), 0.0f, TS_AR, 0.063f),
-	// 	AeroSeg(0.0884f, 0.148f, -90.0f, matrix::Vector3f(0.0f, -0.143f, TS_CM-0.111f), 0.0f, TS_AR, 0.063f, TS_RP),
-	// 	AeroSeg(0.0633f, 0.176f, -90.0f, matrix::Vector3f(0.0f, -0.068f, TS_CM-0.132f), 0.0f, TS_AR, 0.063f),
-	// 	AeroSeg(0.0750f, 0.231f, -90.0f, matrix::Vector3f(0.0f,  0.000f, TS_CM-0.173f), 0.0f, TS_AR),
-	// 	AeroSeg(0.0633f, 0.176f, -90.0f, matrix::Vector3f(0.0f,  0.068f, TS_CM-0.132f), 0.0f, TS_AR, 0.063f),
-	// 	AeroSeg(0.0884f, 0.148f, -90.0f, matrix::Vector3f(0.0f,  0.143f, TS_CM-0.111f), 0.0f, TS_AR, 0.063f, TS_RP),
-	// 	AeroSeg(0.0383f, 0.125f, -90.0f, matrix::Vector3f(0.0f,  0.208f, TS_CM-0.094f), 0.0f, TS_AR, 0.063f),
-	// 	AeroSeg(0.0225f, 0.110f, -90.0f, matrix::Vector3f(0.0f,  0.239f, TS_CM-0.083f), 0.0f, TS_AR)
-	// 	};
-
-	// sensors reconstruction
-	matrix::Vector3f    _acc;
-	matrix::Vector3f    _mag;
-	matrix::Vector3f    _gyro;
-	matrix::Vector3f    _gps_vel;
-	double      _gps_lat, _gps_lat_noiseless;
-	double      _gps_lon, _gps_lon_noiseless;
-	float       _gps_alt, _gps_alt_noiseless;
-	float       _baro_p_mBar;   // reconstructed (simulated) pressure in mBar
-	float       _baro_temp_c;   // reconstructed (simulated) barometer temperature in celcius
-
-	// parameters
-	float _MASS, _T_MAX, _Q_MAX, _L_ROLL, _L_PITCH, _KDV, _KDW, _H0, _T_TAU;
-	double _LAT0, _LON0, _COS_LAT0;
-	matrix::Vector3f _W_I;  // weight of the vehicle in inertial frame [N]
-	matrix::Matrix3f _I;    // vehicle inertia matrix
-	matrix::Matrix3f _Im1;  // inverse of the intertia matrix
-	matrix::Vector3f _mu_I; // NED magnetic field in inertial frame [G]
-
-	int _gps_used;
-	float _baro_offset_m, _mag_offset_x, _mag_offset_y, _mag_offset_z;
-	float _distance_snsr_min, _distance_snsr_max, _distance_snsr_override;
+	VehicleType _vehicle = VehicleType::FW;
 
 	// parameters defined in sih_params.c
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::IMU_GYRO_RATEMAX>) _imu_gyro_ratemax,
-		(ParamInt<px4::params::IMU_INTEG_RATE>) _imu_integration_rate,
-		(ParamFloat<px4::params::SIH_MASS>) _sih_mass,
-		(ParamFloat<px4::params::SIH_IXX>) _sih_ixx,
-		(ParamFloat<px4::params::SIH_IYY>) _sih_iyy,
-		(ParamFloat<px4::params::SIH_IZZ>) _sih_izz,
-		(ParamFloat<px4::params::SIH_IXY>) _sih_ixy,
-		(ParamFloat<px4::params::SIH_IXZ>) _sih_ixz,
-		(ParamFloat<px4::params::SIH_IYZ>) _sih_iyz,
-		(ParamFloat<px4::params::SIH_T_MAX>) _sih_t_max,
-		(ParamFloat<px4::params::SIH_Q_MAX>) _sih_q_max,
-		(ParamFloat<px4::params::SIH_L_ROLL>) _sih_l_roll,
-		(ParamFloat<px4::params::SIH_L_PITCH>) _sih_l_pitch,
-		(ParamFloat<px4::params::SIH_KDV>) _sih_kdv,
-		(ParamFloat<px4::params::SIH_KDW>) _sih_kdw,
-		(ParamInt<px4::params::SIH_LOC_LAT0>) _sih_lat0,
-		(ParamInt<px4::params::SIH_LOC_LON0>) _sih_lon0,
-		(ParamFloat<px4::params::SIH_LOC_H0>) _sih_h0,
-		(ParamFloat<px4::params::SIH_LOC_MU_X>) _sih_mu_x,
-		(ParamFloat<px4::params::SIH_LOC_MU_Y>) _sih_mu_y,
-		(ParamFloat<px4::params::SIH_LOC_MU_Z>) _sih_mu_z,
-		(ParamInt<px4::params::SIH_GPS_USED>) _sih_gps_used,
-		(ParamFloat<px4::params::SIH_BARO_OFFSET>) _sih_baro_offset,
-		(ParamFloat<px4::params::SIH_MAG_OFFSET_X>) _sih_mag_offset_x,
-		(ParamFloat<px4::params::SIH_MAG_OFFSET_Y>) _sih_mag_offset_y,
-		(ParamFloat<px4::params::SIH_MAG_OFFSET_Z>) _sih_mag_offset_z,
-		(ParamFloat<px4::params::SIH_DISTSNSR_MIN>) _sih_distance_snsr_min,
-		(ParamFloat<px4::params::SIH_DISTSNSR_MAX>) _sih_distance_snsr_max,
-		(ParamFloat<px4::params::SIH_DISTSNSR_OVR>) _sih_distance_snsr_override,
+		// (ParamInt<px4::params::IMU_INTEG_RATE>) _imu_integration_rate,
+		// (ParamFloat<px4::params::SIH_MASS>) _sih_mass,
+		// (ParamFloat<px4::params::SIH_IXX>) _sih_ixx,
+		// (ParamFloat<px4::params::SIH_IYY>) _sih_iyy,
+		// (ParamFloat<px4::params::SIH_IZZ>) _sih_izz,
+		// (ParamFloat<px4::params::SIH_IXY>) _sih_ixy,
+		// (ParamFloat<px4::params::SIH_IXZ>) _sih_ixz,
+		// (ParamFloat<px4::params::SIH_IYZ>) _sih_iyz,
+		// (ParamFloat<px4::params::SIH_T_MAX>) _sih_t_max,
+		// (ParamFloat<px4::params::SIH_Q_MAX>) _sih_q_max,
+		// (ParamFloat<px4::params::SIH_L_ROLL>) _sih_l_roll,
+		// (ParamFloat<px4::params::SIH_L_PITCH>) _sih_l_pitch,
+		// (ParamFloat<px4::params::SIH_KDV>) _sih_kdv,
+		// (ParamFloat<px4::params::SIH_KDW>) _sih_kdw,
+		// (ParamInt<px4::params::SIH_LOC_LAT0>) _sih_lat0,
+		// (ParamInt<px4::params::SIH_LOC_LON0>) _sih_lon0,
+		// (ParamFloat<px4::params::SIH_LOC_H0>) _sih_h0,
+		// (ParamFloat<px4::params::SIH_LOC_MU_X>) _sih_mu_x,
+		// (ParamFloat<px4::params::SIH_LOC_MU_Y>) _sih_mu_y,
+		// (ParamFloat<px4::params::SIH_LOC_MU_Z>) _sih_mu_z,
+		// (ParamInt<px4::params::SIH_GPS_USED>) _sih_gps_used,
+		// (ParamFloat<px4::params::SIH_BARO_OFFSET>) _sih_baro_offset,
+		// (ParamFloat<px4::params::SIH_MAG_OFFSET_X>) _sih_mag_offset_x,
+		// (ParamFloat<px4::params::SIH_MAG_OFFSET_Y>) _sih_mag_offset_y,
+		// (ParamFloat<px4::params::SIH_MAG_OFFSET_Z>) _sih_mag_offset_z,
+		// (ParamFloat<px4::params::SIH_DISTSNSR_MIN>) _sih_distance_snsr_min,
+		// (ParamFloat<px4::params::SIH_DISTSNSR_MAX>) _sih_distance_snsr_max,
+		// (ParamFloat<px4::params::SIH_DISTSNSR_OVR>) _sih_distance_snsr_override,
 		(ParamFloat<px4::params::SIH_T_TAU>) _sih_thrust_tau,
 		(ParamInt<px4::params::SIH_VEHICLE_TYPE>) _sih_vtype,
 		(ParamBool<px4::params::SYS_CTRL_ALLOC>) _sys_ctrl_alloc

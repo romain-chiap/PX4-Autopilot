@@ -39,8 +39,6 @@
 //		CT: Christopher Teubert (christopher.a.teubert@nasa.gov)
 //		JW: Jason Watkins (jason.w.watkins@nasa.gov)
 
-// #define ENABLE_LOCKSTEP_SCHEDULER
-#if defined(ENABLE_LOCKSTEP_SCHEDULER)
 
 #include "xplaneConnect.h"
 
@@ -1020,4 +1018,3 @@ int sendCOMM(XPCSocket sock, const char* comm) {
 /*****************************************************************************/
 /****                        End Comm functions                           ****/
 /*****************************************************************************/
-#endif
