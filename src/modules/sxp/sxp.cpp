@@ -64,10 +64,6 @@ Sxp::~Sxp()
 
 void Sxp::run()
 {
-	// _px4_accel.set_temperature(T1_C);
-	// _px4_gyro.set_temperature(T1_C);
-	// _px4_mag.set_temperature(T1_C);
-
 	parameters_updated();
 	init_variables();
 	// gps_no_fix();
@@ -142,6 +138,10 @@ void Sxp::init_variables()
 
 	_u[0] = _u[1] = _u[2] = _u[3] = 0.0f;
 
+	_px4_accel.set_temperature(T1_C);
+	_px4_gyro.set_temperature(T1_C);
+	// _px4_mag.set_temperature(T1_C);
+
 	// open the socket for Xplane connect
 	//IP Address of computer running X-Plane
 	_xpc_sock = openUDP("127.0.0.1");
@@ -175,7 +175,7 @@ void Sxp::read_motors()
 		}
 	}
 
-	float command[6]={_u[1],_u[0],_u[2],_u[3]};
+	float command[6]={-_u[1],_u[0],_u[2],_u[3]};
 	// [Elevator, Aileron, Rudder, Throttle, Gear, Flaps, Speed Brakes]
 	int size = 4;
 	_sendCTRLres = sendCTRL(_xpc_sock, command, size, 0);
@@ -398,7 +398,7 @@ void Sxp::publish_sxp()
 	_gpos.alt = (float)_v_states[2];
 	_gpos_pub.publish(_gpos);
 
-	// publish the estimator status
+	// publish simulated estimator status
 	_estim_s.timestamp_sample = hrt_absolute_time();
 	_estim_s.timestamp = hrt_absolute_time();
 	_estim_s.output_tracking_error[0]=0.0019f;
@@ -417,6 +417,16 @@ void Sxp::publish_sxp()
 	_estim_s.mag_device_id = 197388;
 	_estim_s.solution_status_flags = 895;
 	_estim_s_pub.publish(_estim_s);
+
+	// publish random sensor value so the commander passes the check
+	_px4_accel.update(_now, 0, 0, 9.81f);
+	_px4_gyro.update(_now, _w_B(0), _w_B(1), _w_B(2));
+	// _px4_mag.update(_now, 0, 0, 0);
+	// sensor_baro_s sensor_baro{};
+	// sensor_baro.timestamp_sample = _now;
+	// sensor_baro.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
+	// sensor_baro.timestamp = _now;
+	// _sensor_baro_pub.publish(sensor_baro);
 }
 
 

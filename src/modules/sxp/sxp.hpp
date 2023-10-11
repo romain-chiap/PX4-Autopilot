@@ -76,6 +76,10 @@
 #include <uORB/topics/vehicle_global_position.h>    // to publish groundtruth
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/airspeed.h>
+#include <uORB/topics/sensor_baro.h>
+#include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
+#include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
+#include <lib/drivers/magnetometer/PX4Magnetometer.hpp>
 
 # include "xplaneConnect.h"
 
@@ -128,6 +132,12 @@ private:
 
 	void parameters_updated();
 
+	// simulated sensor instances
+	PX4Accelerometer _px4_accel{1310988}; // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
+	PX4Gyroscope     _px4_gyro{1310988};  // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
+	// PX4Magnetometer  _px4_mag{197388};    //  197388: DRV_MAG_DEVTYPE_MAGSIM, BUS: 3, ADDR: 1, TYPE: SIMULATION
+	// uORB::PublicationMulti<sensor_baro_s> _sensor_baro_pub{ORB_ID(sensor_baro)};
+
 	// angular velocity
 	vehicle_angular_velocity_s			_vehicle_angular_velocity{};
 	uORB::Publication<vehicle_angular_velocity_s>	_vehicle_angular_velocity_pub{ORB_ID(vehicle_angular_velocity)};
@@ -151,6 +161,7 @@ private:
 
 	// hard constants
 	static constexpr uint16_t NB_MOTORS = 6;
+	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
 
 	void init_variables();
 	void read_motors();

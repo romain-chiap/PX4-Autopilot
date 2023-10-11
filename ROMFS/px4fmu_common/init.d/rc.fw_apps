@@ -8,7 +8,9 @@
 #
 # Start the attitude and position estimator.
 #
-ekf2 start &
+if [ "$SIM_MODE" != "sxpsim" ]; then
+	ekf2 start &
+fi
 
 if param compare SYS_CTRL_ALLOC 1
 then

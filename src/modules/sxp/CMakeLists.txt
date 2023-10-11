@@ -43,4 +43,7 @@ px4_add_module(
 		xplaneConnect.h
 	DEPENDS
 		mathlib
+		drivers_accelerometer
+		drivers_gyroscope
+		drivers_magnetometer
 	)
