@@ -180,10 +180,25 @@ void Sxp::read_motors()
 		}
 	}
 
-	float command[6]={-_u[1],_u[0],_u[2],_u[3]};
-	// [Elevator, Aileron, Rudder, Throttle, Gear, Flaps, Speed Brakes]
+	// send the main commands
+	float command[7]={}; 	// [Elevator, Aileron, Rudder, Throttle, Gear, Flaps, Speed Brakes]
+	if (_armed) {
+		command[0] = -_u[1];
+		command[1] = _u[0];
+		command[2] = _u[2];
+		command[3] = _u[3];
+	}
 	int size = 4;
 	_sendCTRLres = sendCTRL(_xpc_sock, command, size, 0);
+
+	actuator_armed_s actuator_armed = {};
+	_actuator_armed_sub.copy(&actuator_armed);
+	if (actuator_armed.armed && !_armed) {
+		// release the parking brake if we just armed
+		float brake[1] = {0};
+		sendDREF(_xpc_sock, "sim/flightmodel/controls/parkbrake", brake, 1);
+	}
+	_armed = actuator_armed.armed;
 }
 
 void Sxp::publish_sxp()
@@ -276,7 +291,7 @@ int Sxp::print_status()
 	PX4_INFO("xpc socket.port: %d, xpc socket.xpPort: %d, xpc socket.sock: %d", (int)_xpc_sock.port, (int)_xpc_sock.xpPort, _xpc_sock.sock);
 	PX4_INFO("last send control res: %d, last get posi res: %d", _sendCTRLres, _getPOSIres);
 	PX4_INFO("length error count: %u, %%: %.2f", _xpc_length_error_count, ((double)_xpc_length_error_count)*100/_total_loops);
-
+  	PX4_INFO("armed: %u", _armed);
 	PX4_INFO("inertial position NED (m)");
 	_p_I.print();
 	PX4_INFO("inertial velocity NED (m/s)");

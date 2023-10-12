@@ -69,17 +69,19 @@
 #include <uORB/SubscriptionInterval.hpp>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/actuator_outputs.h>
+#include <uORB/topics/actuator_armed.h>
 // #include <uORB/topics/sensor_gps.h>
 // #include <uORB/topics/sensor_baro.h>
-#include <uORB/topics/vehicle_angular_velocity.h>   // to publish groundtruth
-#include <uORB/topics/vehicle_attitude.h>           // to publish groundtruth
-#include <uORB/topics/vehicle_global_position.h>    // to publish groundtruth
+#include <uORB/topics/vehicle_angular_velocity.h>
+#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/airspeed.h>
 #include <uORB/topics/sensor_baro.h>
 #include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
 #include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
 #include <lib/drivers/magnetometer/PX4Magnetometer.hpp>
+
 
 # include "xplaneConnect.h"
 
@@ -122,16 +124,6 @@ public:
 
 private:
 
-	// variables for Xplane connect
-	XPCSocket _xpc_sock;
-	int 	_sendCTRLres=-1;
-	int 	_getPOSIres=-1;
-	double _v_states[7]={};
-	matrix::Eulerf _rpy = {};
-	matrix::Eulerf _rpy_old = {};
-	uint32_t _xpc_length_error_count=0;
-	uint32_t _total_loops=0;
-
 	void parameters_updated();
 
 	// simulated sensor instances
@@ -160,10 +152,23 @@ private:
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 	uORB::Subscription _actuator_out_sub{ORB_ID(actuator_outputs)};
+	uORB::Subscription _actuator_armed_sub{ORB_ID(actuator_armed)};
 
 	// hard constants
 	static constexpr uint16_t NB_MOTORS = 6;
 	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
+
+
+	// variables for Xplane connect
+	XPCSocket _xpc_sock;
+	int 	_sendCTRLres=-1;
+	int 	_getPOSIres=-1;
+	double _v_states[7]={};
+	matrix::Eulerf _rpy = {};
+	matrix::Eulerf _rpy_old = {};
+	uint32_t _xpc_length_error_count=0;
+	uint32_t _total_loops=0;
+	bool _armed=false;
 
 	void init_variables();
 	void read_motors();
