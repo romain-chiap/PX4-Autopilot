@@ -354,19 +354,21 @@ void Sxp::publish_sxp()
 
 		// publish the airspeed
 		// float airspeed_i[1]={};
-		// int size=1;
-		// if (getDREF(_xpc_sock, "sim/flightmodel/position/indicated_airspeed", airspeed_i, &size)==0 && size>0) {
-		// 	_indicated_airspeed = airspeed_i[0];
-		// }
-		// float airspeed_t[1]={};
+		// int size=26;
+		// // if (getDREF(_xpc_sock, "sim/flightmodel/position/indicated_airspeed", airspeed_i, &size)==0 && size>0) {
+		// // 	_indicated_airspeed = airspeed_i[0];
+		// // }
+		// float airspeed_t[26]={};
 		// if (getDREF(_xpc_sock, "sim/flightmodel/position/true_airspeed", airspeed_t, &size)==0 && size>0) {
 		// 	_true_airspeed = airspeed_t[0];
 		// }
-		_airspeed.timestamp = _now;
-		_airspeed.timestamp_sample = _now;
-		_airspeed.indicated_airspeed_m_s = _indicated_airspeed;
-		_airspeed.true_airspeed_m_s = _true_airspeed;
-		_airspeed.air_temperature_celsius = baro_temp_c;
+		// _indicated_airspeed = _true_airspeed * 1;
+
+		// _airspeed.timestamp = _now;
+		// _airspeed.timestamp_sample = _now;
+		// _airspeed.indicated_airspeed_m_s = _indicated_airspeed;
+		// _airspeed.true_airspeed_m_s = _true_airspeed;
+		// _airspeed.air_temperature_celsius = baro_temp_c;
 		// _airspeed_pub.publish(_airspeed);
 
 	} else if (_getPOSIres==-3) {

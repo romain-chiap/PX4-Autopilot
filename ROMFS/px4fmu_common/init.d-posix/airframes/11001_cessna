@@ -25,8 +25,13 @@ param set-default NAV_LOITER_RAD 300
 param set-default FW_R_LIM 35
 param set-default FW_L1_R_SLEW_MAX 40
 param set-default FW_L1_PERIOD 35
-param set-default FW_LND_ANG 1
+param set-default FW_L1_DAMPING 0.85
+
+param set-default SDLOG_MODE 1
+
+param set-default FW_T_SPDWEIGHT 0.5
 
 param set-default BAT_N_CELLS 3
+param set-default FW_LND_ANG 1
 
 param set RWTO_TKOFF 1  # enable takeoff from runway (as opposed to launched)
