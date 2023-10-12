@@ -75,8 +75,8 @@ void Sxp::run()
 	// _airspeed_time = task_start;
 	// _time = task_start;
 	// _dist_snsr_time = task_start;
-	_vehicle = (VehicleType)constrain(_sih_vtype.get(), static_cast<typeof _sih_vtype.get()>(0),
-					  static_cast<typeof _sih_vtype.get()>(2));
+	// _vehicle = (VehicleType)constrain(_sih_vtype.get(), static_cast<typeof _sih_vtype.get()>(0),
+	// 				  static_cast<typeof _sih_vtype.get()>(2));
 
 	if (_sys_ctrl_alloc.get()) {
 		_actuator_out_sub = uORB::Subscription{ORB_ID(actuator_outputs_sim)};
@@ -193,14 +193,13 @@ void Sxp::read_motors()
 		_last_actuator_output_time = actuators_out.timestamp;
 
 		if (_sys_ctrl_alloc.get()) {
-			for (int i = 0; i < NB_MOTORS; i++) { // saturate the motor signals
+			for (int i = 0; i < NB_ACTUATORS; i++) { // saturate the motor signals
 				_u[i] = actuators_out.output[i];
 			}
 
 		} else {
-			for (int i = 0; i < NB_MOTORS; i++) { // saturate the motor signals
-				if ((_vehicle == VehicleType::FW && i < 3) || (_vehicle == VehicleType::TS
-						&& i > 3)) { // control surfaces in range [-1,1]
+			for (int i = 0; i < NB_ACTUATORS; i++) { // saturate the motor signals
+				if (i != 3) { // control surfaces in range [-1,1]
 					_u[i] = constrain(2.0f * (actuators_out.output[i] - pwm_middle) / (PWM_DEFAULT_MAX - PWM_DEFAULT_MIN), -1.0f, 1.0f);
 
 				} else { // throttle signals in range [0,1]
@@ -213,12 +212,14 @@ void Sxp::read_motors()
 	// send the main commands
 	float command[7]={}; 	// [Elevator, Aileron, Rudder, Throttle, Gear, Flaps, Speed Brakes]
 	if (_armed) {
-		command[0] = -_u[1];
-		command[1] = _u[0];
-		command[2] = _u[2];
-		command[3] = _u[3];
+		command[0] = -_u[1];	// elevator
+		command[1] = _u[0];	// ailerons
+		// command[2] = _u[2]+_u[6];	// we mix the wheel in there
+		command[2] = _u[2];	// rudder
+		command[3] = _u[3];	// throttle
+		command[5] = _u[4];	// flaps
 	}
-	int size = 4;
+	int size = 6;
 	_sendCTRLres = sendCTRL(_xpc_sock, command, size, 0);
 
 	actuator_armed_s actuator_armed = {};
@@ -304,6 +305,12 @@ void Sxp::publish_sxp()
 		if (!_map_proj.isInitialized() && fabs(_gpos.lat*_gpos.lon)>0.1) {
 			_map_proj.initReference(_gpos.lat,_gpos.lon);
 			_alt0 =  (float)_gpos.alt;
+			_local_pos.xy_global = true;
+			_local_pos.z_global = true;
+			_local_pos.ref_timestamp = _now;
+			_local_pos.ref_lat = _gpos.lat;
+			_local_pos.ref_lon = _gpos.lon;
+			_local_pos.ref_alt = _alt0;
 		}
 		_pos_I = _map_proj.project(_gpos.lat,_gpos.lon);
 		// guards against derivative of a constant

@@ -164,7 +164,7 @@ private:
 	uORB::Subscription _actuator_armed_sub{ORB_ID(actuator_armed)};
 
 	// hard constants
-	static constexpr uint16_t NB_MOTORS = 6;
+	static constexpr uint16_t NB_ACTUATORS = 7;
 	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
 	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
 	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
@@ -230,7 +230,7 @@ private:
 	matrix::Vector3f    _w_B;           // body rates in body frame [rad/s]
 	matrix::Quatf       _dq;            // quaternion differential
 	matrix::Vector3f    _w_B_dot;       // body rates differential
-	float       _u[NB_MOTORS];          // thruster signals
+	float       _u[NB_ACTUATORS];          // thruster signals
 
 	enum class VehicleType {MC, FW, TS};
 	VehicleType _vehicle = VehicleType::FW;

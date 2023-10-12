@@ -19,14 +19,14 @@ param set-default CBRK_SUPPLY_CHK 894281
 param set-default COM_PREARM_MODE 0
 param set-default CBRK_IO_SAFETY 22027
 param set-default CBRK_AIRSPD_CHK 162128
-param set-default SYS_HAS_BARO 1
-param set-default SYS_HAS_GPS 1
-param set-default SYS_HAS_MAG 1
 param set-default MIS_DIST_1WP 10000
 param set-default MIS_DIST_WPS 10000
+param set-default NAV_LOITER_RAD 300
+param set-default FW_R_LIM 35
+param set-default FW_L1_R_SLEW_MAX 40
+param set-default FW_L1_PERIOD 35
+param set-default FW_LND_ANG 1
 
 param set-default BAT_N_CELLS 3
 
-
-param set SIH_VEHICLE_TYPE 1 	# sih as fixed wing
 param set RWTO_TKOFF 1  # enable takeoff from runway (as opposed to launched)
