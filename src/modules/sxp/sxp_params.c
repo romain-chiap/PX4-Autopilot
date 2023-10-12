@@ -40,17 +40,17 @@
  */
 
 // /**
-//  * Vehicle mass
+//  * Simulated velocity filter time constant
 //  *
-//  * This value can be measured by weighting the quad on a scale.
+//  * Time constant for the first order filter after differentiating the position.
 //  *
-//  * @unit kg
+//  * @unit s
 //  * @min 0.0
 //  * @decimal 2
 //  * @increment 0.1
-//  * @group Simulation In Hardware
+//  * @group Simulation X-Plane
 //  */
-// PARAM_DEFINE_FLOAT(SIH_MASS, 1.0f);
+PARAM_DEFINE_FLOAT(SXP_TAU_VEL, 0.4f);
 
 // /**
 //  * Vehicle inertia about X axis

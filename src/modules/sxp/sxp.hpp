@@ -174,19 +174,20 @@ private:
 	int 	_sendCTRLres=-1;
 	int 	_getPOSIres=-1;
 	double _v_states[7]={};
+	uint32_t _xpc_length_error_count=0;
+	uint32_t _total_loops=0;
+	MapProjection _map_proj={};
 	matrix::Eulerf _rpy = {};
 	matrix::Eulerf _rpy_old = {};
 	matrix::Eulerf _rpy_dot = {};
-	uint32_t _xpc_length_error_count=0;
-	uint32_t _total_loops=0;
-	bool _armed=false;
-	float _indicated_airspeed=0;
-	float _true_airspeed=0;
-	MapProjection _map_proj={};
 	matrix::Vector2f _pos_I={};
 	matrix::Vector2f _vel_I={};
 	matrix::Vector2f _pos_I_old={};
 	float _alt0=0;
+	float _vz=0;
+	float _indicated_airspeed=0;
+	float _true_airspeed=0;
+	bool _armed=false;
 
 	void init_variables();
 	void read_motors();
@@ -238,35 +239,7 @@ private:
 	// parameters defined in sih_params.c
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::IMU_GYRO_RATEMAX>) _imu_gyro_ratemax,
-		// (ParamInt<px4::params::IMU_INTEG_RATE>) _imu_integration_rate,
-		// (ParamFloat<px4::params::SIH_MASS>) _sih_mass,
-		// (ParamFloat<px4::params::SIH_IXX>) _sih_ixx,
-		// (ParamFloat<px4::params::SIH_IYY>) _sih_iyy,
-		// (ParamFloat<px4::params::SIH_IZZ>) _sih_izz,
-		// (ParamFloat<px4::params::SIH_IXY>) _sih_ixy,
-		// (ParamFloat<px4::params::SIH_IXZ>) _sih_ixz,
-		// (ParamFloat<px4::params::SIH_IYZ>) _sih_iyz,
-		// (ParamFloat<px4::params::SIH_T_MAX>) _sih_t_max,
-		// (ParamFloat<px4::params::SIH_Q_MAX>) _sih_q_max,
-		// (ParamFloat<px4::params::SIH_L_ROLL>) _sih_l_roll,
-		// (ParamFloat<px4::params::SIH_L_PITCH>) _sih_l_pitch,
-		// (ParamFloat<px4::params::SIH_KDV>) _sih_kdv,
-		// (ParamFloat<px4::params::SIH_KDW>) _sih_kdw,
-		// (ParamInt<px4::params::SIH_LOC_LAT0>) _sih_lat0,
-		// (ParamInt<px4::params::SIH_LOC_LON0>) _sih_lon0,
-		// (ParamFloat<px4::params::SIH_LOC_H0>) _sih_h0,
-		// (ParamFloat<px4::params::SIH_LOC_MU_X>) _sih_mu_x,
-		// (ParamFloat<px4::params::SIH_LOC_MU_Y>) _sih_mu_y,
-		// (ParamFloat<px4::params::SIH_LOC_MU_Z>) _sih_mu_z,
-		// (ParamInt<px4::params::SIH_GPS_USED>) _sih_gps_used,
-		// (ParamFloat<px4::params::SIH_BARO_OFFSET>) _sih_baro_offset,
-		// (ParamFloat<px4::params::SIH_MAG_OFFSET_X>) _sih_mag_offset_x,
-		// (ParamFloat<px4::params::SIH_MAG_OFFSET_Y>) _sih_mag_offset_y,
-		// (ParamFloat<px4::params::SIH_MAG_OFFSET_Z>) _sih_mag_offset_z,
-		// (ParamFloat<px4::params::SIH_DISTSNSR_MIN>) _sih_distance_snsr_min,
-		// (ParamFloat<px4::params::SIH_DISTSNSR_MAX>) _sih_distance_snsr_max,
-		// (ParamFloat<px4::params::SIH_DISTSNSR_OVR>) _sih_distance_snsr_override,
-		(ParamFloat<px4::params::SIH_T_TAU>) _sih_thrust_tau,
+		(ParamFloat<px4::params::SXP_TAU_VEL>) _sxp_tau_vel,
 		(ParamInt<px4::params::SIH_VEHICLE_TYPE>) _sih_vtype,
 		(ParamBool<px4::params::SYS_CTRL_ALLOC>) _sys_ctrl_alloc
 	)

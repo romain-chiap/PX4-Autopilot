@@ -321,13 +321,15 @@ void Sxp::publish_sxp()
 			}
 			_last_gpos = _now;
 			// compute the local velocity
-			_vel_I = (_pos_I - _pos_I_old)/_dt_gpos;
+			Vector2f vI = (_pos_I - _pos_I_old)/_dt_gpos;
+			_vel_I = _vel_I + _dt_gpos/_sxp_tau_vel.get() * (vI - _vel_I);
 			_local_pos.v_z_valid = true;
 			_local_pos.v_xy_valid = true;
 			_local_pos.vx = _vel_I(0);
 			_local_pos.vy = _vel_I(1);
 			float z = _alt0 - (float)_gpos.alt;
-			_local_pos.vz = (z - _local_pos.z)/_dt_gpos;
+			_vz = _vz + (z - _local_pos.z - _dt_gpos*_vz)/_sxp_tau_vel.get();
+			_local_pos.vz = _vz;
 		}
 		_local_pos.xy_valid = true;
 		_local_pos.z_valid = true;
@@ -348,7 +350,7 @@ void Sxp::publish_sxp()
 		_sensor_gps.vel_m_s = _vel_I.norm();
 		_sensor_gps.vel_n_m_s = _vel_I(0);
 		_sensor_gps.vel_e_m_s = _vel_I(1);
-		_sensor_gps.vel_d_m_s = _local_pos.vz;
+		_sensor_gps.vel_d_m_s = _vz;
 		_sensor_gps.cog_rad = atan2(_vel_I(1),_vel_I(0));
 		_gps_pub.publish(_sensor_gps);
 
@@ -365,12 +367,12 @@ void Sxp::publish_sxp()
 		// // }
 		// _true_airspeed = _indicated_airspeed * 1;
 
-		// _airspeed.timestamp = _now;
-		// _airspeed.timestamp_sample = _now;
-		// _airspeed.indicated_airspeed_m_s = _indicated_airspeed;
-		// _airspeed.true_airspeed_m_s = _true_airspeed;
-		// _airspeed.air_temperature_celsius = baro_temp_c;
-		// _airspeed_pub.publish(_airspeed);
+		_airspeed.timestamp = _now;
+		_airspeed.timestamp_sample = _now;
+		_airspeed.indicated_airspeed_m_s = _vel_I.norm();
+		_airspeed.true_airspeed_m_s = _vel_I.norm();
+		_airspeed.air_temperature_celsius = baro_temp_c;
+		_airspeed_pub.publish(_airspeed);
 
 	} else if (_getPOSIres==-3) {
 		_xpc_length_error_count++;
