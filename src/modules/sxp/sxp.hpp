@@ -70,13 +70,13 @@
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/actuator_armed.h>
-// #include <uORB/topics/sensor_gps.h>
-// #include <uORB/topics/sensor_baro.h>
 #include <uORB/topics/vehicle_angular_velocity.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/airspeed.h>
+#include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/sensor_baro.h>
 #include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
 #include <lib/drivers/gyroscope/PX4Gyroscope.hpp>
@@ -129,8 +129,7 @@ private:
 	// simulated sensor instances
 	PX4Accelerometer _px4_accel{1310988}; // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
 	PX4Gyroscope     _px4_gyro{1310988};  // 1310988: DRV_IMU_DEVTYPE_SIM, BUS: 1, ADDR: 1, TYPE: SIMULATION
-	// PX4Magnetometer  _px4_mag{197388};    //  197388: DRV_MAG_DEVTYPE_MAGSIM, BUS: 3, ADDR: 1, TYPE: SIMULATION
-	// uORB::PublicationMulti<sensor_baro_s> _sensor_baro_pub{ORB_ID(sensor_baro)};
+	PX4Magnetometer  _px4_mag{197388};    //  197388: DRV_MAG_DEVTYPE_MAGSIM, BUS: 3, ADDR: 1, TYPE: SIMULATION
 
 	// angular velocity
 	vehicle_angular_velocity_s			_vehicle_angular_velocity{};
@@ -144,11 +143,21 @@ private:
 	vehicle_global_position_s			_gpos{};
 	uORB::Publication<vehicle_global_position_s>	_gpos_pub{ORB_ID(vehicle_global_position)};
 
+	vehicle_local_position_s			_local_pos{};
+	uORB::Publication<vehicle_local_position_s>	_local_pos_pub{ORB_ID(vehicle_local_position)};
+
+	sensor_gps_s 					_sensor_gps{};
+	uORB::Publication<sensor_gps_s>			_gps_pub{ORB_ID(sensor_gps)};
+
 	estimator_status_s 				_estim_s{};
 	uORB::Publication<estimator_status_s>		_estim_s_pub{ORB_ID(estimator_status)};
 
+	sensor_baro_s 					_sensor_baro{};
+	uORB::PublicationMulti<sensor_baro_s> 		_sensor_baro_pub{ORB_ID(sensor_baro)};
+
 	// airspeed
-	uORB::Publication<airspeed_s>				_airspeed_pub{ORB_ID(airspeed)};
+	airspeed_s 					_airspeed{};
+	uORB::Publication<airspeed_s>			_airspeed_pub{ORB_ID(airspeed)};
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 	uORB::Subscription _actuator_out_sub{ORB_ID(actuator_outputs)};
@@ -157,7 +166,8 @@ private:
 	// hard constants
 	static constexpr uint16_t NB_MOTORS = 6;
 	static constexpr float T1_C = 15.0f;                        // ground temperature in celcius
-
+	static constexpr float T1_K = T1_C - CONSTANTS_ABSOLUTE_NULL_CELSIUS;   // ground temperature in Kelvin
+	static constexpr float TEMP_GRADIENT  = -6.5f / 1000.0f;    // temperature gradient in degrees per metre
 
 	// variables for Xplane connect
 	XPCSocket _xpc_sock;
@@ -166,9 +176,17 @@ private:
 	double _v_states[7]={};
 	matrix::Eulerf _rpy = {};
 	matrix::Eulerf _rpy_old = {};
+	matrix::Eulerf _rpy_dot = {};
 	uint32_t _xpc_length_error_count=0;
 	uint32_t _total_loops=0;
 	bool _armed=false;
+	float _indicated_airspeed=0;
+	float _true_airspeed=0;
+	MapProjection _map_proj={};
+	matrix::Vector2f _pos_I={};
+	matrix::Vector2f _vel_I={};
+	matrix::Vector2f _pos_I_old={};
+	float _alt0=0;
 
 	void init_variables();
 	void read_motors();
@@ -184,7 +202,8 @@ private:
 	perf_counter_t  _loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": cycle")};
 	perf_counter_t  _loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": cycle interval")};
 
-	hrt_abstime _last_run{0};
+	hrt_abstime _last_gyro{0};
+	hrt_abstime _last_gpos{0};
 	hrt_abstime _last_actuator_output_time{0};
 	// hrt_abstime _baro_time{0};
 	// hrt_abstime _gps_time{0};
@@ -194,6 +213,7 @@ private:
 	// hrt_abstime _dist_snsr_time{0};
 	hrt_abstime _now{0};
 	float       _dt{0};         // sampling time [s]
+	float       _dt_gpos{0};
 	// bool        _grounded{true};// whether the vehicle is on the ground
 
 	matrix::Vector3f    _T_B;           // thrust force in body frame [N]

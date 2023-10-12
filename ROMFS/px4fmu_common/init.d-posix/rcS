@@ -220,7 +220,9 @@ battery_simulator start
 tone_alarm start
 rc_update start
 manual_control start
-sensors start
+if [ "$SIM_MODE" != "sxpsim" ]; then
+	sensors start
+fi
 commander start
 
 # Configure vehicle type specific parameters.

@@ -19,9 +19,11 @@ param set-default CBRK_SUPPLY_CHK 894281
 param set-default COM_PREARM_MODE 0
 param set-default CBRK_IO_SAFETY 22027
 param set-default CBRK_AIRSPD_CHK 162128
-param set-default SYS_HAS_BARO 0
-param set-default SYS_HAS_GPS 0
-param set-default SYS_HAS_MAG 0
+param set-default SYS_HAS_BARO 1
+param set-default SYS_HAS_GPS 1
+param set-default SYS_HAS_MAG 1
+param set-default MIS_DIST_1WP 10000
+param set-default MIS_DIST_WPS 10000
 
 param set-default BAT_N_CELLS 3
 

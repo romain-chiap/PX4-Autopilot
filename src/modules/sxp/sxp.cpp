@@ -69,7 +69,8 @@ void Sxp::run()
 	// gps_no_fix();
 
 	// const hrt_abstime task_start = hrt_absolute_time();
-	_last_run = hrt_absolute_time();
+	_last_gyro = hrt_absolute_time();
+	_last_gpos = hrt_absolute_time();
 	// _gps_time = task_start;
 	// _airspeed_time = task_start;
 	// _time = task_start;
@@ -140,7 +141,8 @@ void Sxp::init_variables()
 
 	_px4_accel.set_temperature(T1_C);
 	_px4_gyro.set_temperature(T1_C);
-	// _px4_mag.set_temperature(T1_C);
+	_sensor_baro.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
+	_px4_mag.set_temperature(T1_C);
 
 	// open the socket for Xplane connect
 	//IP Address of computer running X-Plane
@@ -150,6 +152,34 @@ void Sxp::init_variables()
 	int size = 1;
 	sendDREF(_xpc_sock, "sim/operation/override/override_joystick", values, size);
 
+	// init the gps
+	_sensor_gps.fix_type = 3;  // 3D fix
+	_sensor_gps.satellites_used = 7;
+	_sensor_gps.heading = NAN;
+	_sensor_gps.heading_offset = NAN;
+	_sensor_gps.s_variance_m_s = 0.5f;
+	_sensor_gps.c_variance_rad = 0.1f;
+	_sensor_gps.eph = 0.9f;
+	_sensor_gps.epv = 1.78f;
+	_sensor_gps.hdop = 0.7f;
+	_sensor_gps.vdop = 1.1f;
+
+	// init the estimator
+	_estim_s.output_tracking_error[0]=0.0019f;
+	_estim_s.output_tracking_error[1]=0.0106f;
+	_estim_s.output_tracking_error[2]=0.0229f;
+	_estim_s.control_mode_flags = 2147484183;
+	_estim_s.pos_horiz_accuracy = 0.2048f;
+	_estim_s.pos_vert_accuracy = 0.3553f;
+	_estim_s.mag_test_ratio = 0.2860f;
+	_estim_s.vel_test_ratio = 0.0338f;
+	_estim_s.pos_test_ratio = 0.0644f;
+	_estim_s.hgt_test_ratio = 0.0059f;
+	_estim_s.accel_device_id = 1310988;
+	_estim_s.gyro_device_id = 1310988;
+	_estim_s.baro_device_id = 6620172;
+	_estim_s.mag_device_id = 197388;
+	_estim_s.solution_status_flags = 895;
 }
 
 // read the motor signals outputted from the mixer
@@ -195,8 +225,8 @@ void Sxp::read_motors()
 	_actuator_armed_sub.copy(&actuator_armed);
 	if (actuator_armed.armed && !_armed) {
 		// release the parking brake if we just armed
-		float brake[1] = {0};
-		sendDREF(_xpc_sock, "sim/flightmodel/controls/parkbrake", brake, 1);
+		float brake[3] = {0,0,0};
+		sendDREF(_xpc_sock, "sim/flightmodel/controls/parkbrake", brake, 3);
 	}
 	_armed = actuator_armed.armed;
 }
@@ -206,12 +236,6 @@ void Sxp::publish_sxp()
 	// [Lat, Lon, Alt, Pitch, Roll, Yaw, Gear]
 	_getPOSIres = getPOSI(_xpc_sock, _v_states, 0);
 	if (_getPOSIres==0) {
-		_now = hrt_absolute_time();
-		_dt = (_now - _last_run) * 1e-6f;
-		if (_dt < 1.0e-5f) {
-			return;
-		}
-		_last_run = _now;
 
 		// publish attitude
 		_att.timestamp = hrt_absolute_time();
@@ -220,18 +244,28 @@ void Sxp::publish_sxp()
 		q.copyTo(_att.q);
 		_att_pub.publish(_att);
 
-		// compute the angular rates
-		Eulerf _rpy_dot = (_rpy - _rpy_old) / _dt;
-		_rpy_old = _rpy;
-		float S_[3][3] = {
-			{1, 0, -sinf(_rpy.theta())},
-			{0, cosf(_rpy.phi()), sinf(_rpy.phi())*cosf(_rpy.theta())},
-			{0, -sinf(_rpy.phi()), cosf(_rpy.phi())*cosf(_rpy.theta())}
-		};
-		Matrix3f S = Matrix3f(S_);
-		_w_B = S*_rpy_dot;	// correct transformation
+		_now = hrt_absolute_time();
+		// guards against derivative of a constant
+		if (Vector3f(_rpy - _rpy_old).norm()>1e-7f)  {
+			_dt = (_now - _last_gyro) * 1e-6f;
+			if (_dt < 1.0e-5f) {
+				return;
+			}
+			_last_gyro = _now;
 
-		// publish angular velocity groundtruth
+			// compute the angular rates
+			_rpy_dot = (_rpy - _rpy_old) / _dt;
+			_rpy_old = _rpy;
+			float S_[3][3] = {
+				{1, 0, -sinf(_rpy.theta())},
+				{0, cosf(_rpy.phi()), sinf(_rpy.phi())*cosf(_rpy.theta())},
+				{0, -sinf(_rpy.phi()), cosf(_rpy.phi())*cosf(_rpy.theta())}
+			};
+			Matrix3f S = Matrix3f(S_);
+			_w_B = S*_rpy_dot;	// correct transformation
+		}
+
+		// publish angular velocity
 		_vehicle_angular_velocity.timestamp = hrt_absolute_time();
 		_vehicle_angular_velocity.xyz[0] = _w_B(0); // rollspeed;
 		_vehicle_angular_velocity.xyz[1] = _w_B(1); // pitchspeed;
@@ -248,38 +282,91 @@ void Sxp::publish_sxp()
 		// publish simulated estimator status
 		_estim_s.timestamp_sample = hrt_absolute_time();
 		_estim_s.timestamp = hrt_absolute_time();
-		_estim_s.output_tracking_error[0]=0.0019f;
-		_estim_s.output_tracking_error[1]=0.0106f;
-		_estim_s.output_tracking_error[2]=0.0229f;
-		_estim_s.control_mode_flags = 2147484183;
-		_estim_s.pos_horiz_accuracy = 0.2048f;
-		_estim_s.pos_vert_accuracy = 0.3553f;
-		_estim_s.mag_test_ratio = 0.2860f;
-		_estim_s.vel_test_ratio = 0.0338f;
-		_estim_s.pos_test_ratio = 0.0644f;
-		_estim_s.hgt_test_ratio = 0.0059f;
-		_estim_s.accel_device_id = 1310988;
-		_estim_s.gyro_device_id = 1310988;
-		_estim_s.baro_device_id = 6620172;
-		_estim_s.mag_device_id = 197388;
-		_estim_s.solution_status_flags = 895;
 		_estim_s_pub.publish(_estim_s);
 
 		// publish random sensor value so the commander passes the check
 		_px4_accel.update(_now, 0, 0, 9.81f);
 		_px4_gyro.update(_now, _w_B(0), _w_B(1), _w_B(2));
-		// _px4_mag.update(_now, 0, 0, 0);
-		// sensor_baro_s sensor_baro{};
-		// sensor_baro.timestamp_sample = _now;
-		// sensor_baro.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
-		// sensor_baro.timestamp = _now;
-		// _sensor_baro_pub.publish(sensor_baro);
+		_px4_mag.update(_now, 0, 0, 0);
+
+		// barometer
+		_sensor_baro.timestamp_sample = _now;
+		_sensor_baro.timestamp = _now;
+		float altitude = (float)_gpos.alt;
+		float baro_p_mBar = CONSTANTS_STD_PRESSURE_MBAR *        // reconstructed pressure in mBar
+			powf((1.0f + altitude * TEMP_GRADIENT / T1_K), -CONSTANTS_ONE_G / (TEMP_GRADIENT * CONSTANTS_AIR_GAS_CONST));
+		float baro_temp_c = T1_K + CONSTANTS_ABSOLUTE_NULL_CELSIUS + TEMP_GRADIENT * altitude; // reconstructed temperture in celcius
+		_sensor_baro.pressure = baro_p_mBar * 100.f;
+		_sensor_baro.temperature = baro_temp_c;
+		_sensor_baro_pub.publish(_sensor_baro);
+
+		// pubish the local position
+		if (!_map_proj.isInitialized() && fabs(_gpos.lat*_gpos.lon)>0.1) {
+			_map_proj.initReference(_gpos.lat,_gpos.lon);
+			_alt0 =  (float)_gpos.alt;
+		}
+		_pos_I = _map_proj.project(_gpos.lat,_gpos.lon);
+		// guards against derivative of a constant
+		if (Vector2f(_pos_I - _pos_I_old).norm()>1e-7f)  {
+			_dt_gpos = (_now - _last_gpos) * 1e-6f;
+			if (_dt_gpos < 1.0e-5f) {
+				return;
+			}
+			_last_gpos = _now;
+			// compute the local velocity
+			_vel_I = (_pos_I - _pos_I_old)/_dt_gpos;
+			_local_pos.v_z_valid = true;
+			_local_pos.v_xy_valid = true;
+			_local_pos.vx = _vel_I(0);
+			_local_pos.vy = _vel_I(1);
+			float z = _alt0 - (float)_gpos.alt;
+			_local_pos.vz = (z - _local_pos.z)/_dt_gpos;
+		}
+		_local_pos.xy_valid = true;
+		_local_pos.z_valid = true;
+		_local_pos.x = _pos_I(0);
+		_local_pos.y = _pos_I(1);
+		_local_pos.z = _alt0 - (float)_gpos.alt;
+		_local_pos.timestamp = _now;
+		_local_pos.timestamp_sample = _now;
+		_pos_I_old = _pos_I;
+		_local_pos_pub.publish(_local_pos);
+
+		// publish the gps
+		_sensor_gps.timestamp = _now;
+		_sensor_gps.lat = (int32_t)(_gpos.lat*1e7);
+		_sensor_gps.lon = (int32_t)(_gpos.lon*1e7);
+		_sensor_gps.alt = (int32_t)(_gpos.alt*1000);
+		_sensor_gps.vel_ned_valid = true;
+		_sensor_gps.vel_m_s = _vel_I.norm();
+		_sensor_gps.vel_n_m_s = _vel_I(0);
+		_sensor_gps.vel_e_m_s = _vel_I(1);
+		_sensor_gps.vel_d_m_s = _local_pos.vz;
+		_sensor_gps.cog_rad = atan2(_vel_I(1),_vel_I(0));
+		_gps_pub.publish(_sensor_gps);
+
+		// publish the airspeed
+		// float airspeed_i[1]={};
+		// int size=1;
+		// if (getDREF(_xpc_sock, "sim/flightmodel/position/indicated_airspeed", airspeed_i, &size)==0 && size>0) {
+		// 	_indicated_airspeed = airspeed_i[0];
+		// }
+		// float airspeed_t[1]={};
+		// if (getDREF(_xpc_sock, "sim/flightmodel/position/true_airspeed", airspeed_t, &size)==0 && size>0) {
+		// 	_true_airspeed = airspeed_t[0];
+		// }
+		_airspeed.timestamp = _now;
+		_airspeed.timestamp_sample = _now;
+		_airspeed.indicated_airspeed_m_s = _indicated_airspeed;
+		_airspeed.true_airspeed_m_s = _true_airspeed;
+		_airspeed.air_temperature_celsius = baro_temp_c;
+		// _airspeed_pub.publish(_airspeed);
+
 	} else if (_getPOSIres==-3) {
 		_xpc_length_error_count++;
 	}
 	_total_loops++;
 }
-
 
 int Sxp::print_status()
 {
