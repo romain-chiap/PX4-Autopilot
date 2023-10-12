@@ -26,6 +26,10 @@ param set-default FW_R_LIM 35
 param set-default FW_L1_R_SLEW_MAX 40
 param set-default FW_L1_PERIOD 35
 param set-default FW_L1_DAMPING 0.85
+param set-default FW_T_I_GAIN_PIT 0.04
+param set-default FW_PR_P 0.12
+param set-default FW_PR_I 0.15
+param set-default FW_FLAPS_LND_SCL 0.8
 
 param set-default SDLOG_MODE 1
 

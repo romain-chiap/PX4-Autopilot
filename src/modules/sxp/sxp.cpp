@@ -352,17 +352,18 @@ void Sxp::publish_sxp()
 		_sensor_gps.cog_rad = atan2(_vel_I(1),_vel_I(0));
 		_gps_pub.publish(_sensor_gps);
 
-		// publish the airspeed
+		// // publish the airspeed
 		// float airspeed_i[1]={};
-		// int size=26;
+		// int size=1;
 		// // if (getDREF(_xpc_sock, "sim/flightmodel/position/indicated_airspeed", airspeed_i, &size)==0 && size>0) {
-		// // 	_indicated_airspeed = airspeed_i[0];
-		// // }
-		// float airspeed_t[26]={};
-		// if (getDREF(_xpc_sock, "sim/flightmodel/position/true_airspeed", airspeed_t, &size)==0 && size>0) {
-		// 	_true_airspeed = airspeed_t[0];
+		// if (getDREF(_xpc_sock, "sim/cockpit2/autopilot/airspeed_dial_kts", airspeed_i, &size)==0 && size>0) {
+		// 	_indicated_airspeed = airspeed_i[0]*0.514444f;
 		// }
-		// _indicated_airspeed = _true_airspeed * 1;
+		// // float airspeed_t[26]={};
+		// // if (getDREF(_xpc_sock, "sim/flightmodel/position/true_airspeed", airspeed_t, &size)==0 && size>0) {
+		// // 	_true_airspeed = airspeed_t[0];
+		// // }
+		// _true_airspeed = _indicated_airspeed * 1;
 
 		// _airspeed.timestamp = _now;
 		// _airspeed.timestamp_sample = _now;
