@@ -145,6 +145,11 @@ void Sxp::init_variables()
 	// open the socket for Xplane connect
 	//IP Address of computer running X-Plane
 	_xpc_sock = openUDP("127.0.0.1");
+
+	float values[2] = {1,1};
+	int size = 1;
+	sendDREF(_xpc_sock, "sim/operation/override/override_joystick", values, size);
+
 }
 
 // read the motor signals outputted from the mixer
@@ -181,252 +186,83 @@ void Sxp::read_motors()
 	_sendCTRLres = sendCTRL(_xpc_sock, command, size, 0);
 }
 
-// generate the motors thrust and torque in the body frame
-void Sxp::generate_force_and_torques()
-{
-
-
-}
-
-
-// apply the equations of motion of a rigid body and integrate one step
-void Sxp::equations_of_motion()
-{
-	// _C_IB = matrix::Dcm<float>(_q); // body to inertial transformation
-
-	// // Equations of motion of a rigid body
-	// _p_I_dot = _v_I;                        // position differential
-	// _v_I_dot = (_W_I + _Fa_I + _C_IB * _T_B) / _MASS;   // conservation of linear momentum
-	// // _q_dot = _q.derivative1(_w_B);              // attitude differential
-	// _dq = Quatf::expq(0.5f * _dt * _w_B);
-	// _w_B_dot = _Im1 * (_Mt_B + _Ma_B - _w_B.cross(_I * _w_B)); // conservation of angular momentum
-
-	// // fake ground, avoid free fall
-	// if (_p_I(2) > 0.0f && (_v_I_dot(2) > 0.0f || _v_I(2) > 0.0f)) {
-	// 	if (_vehicle == VehicleType::MC || _vehicle == VehicleType::TS) {
-	// 		if (!_grounded) {    // if we just hit the floor
-	// 			// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
-	// 			_v_I_dot = -_v_I / _dt;
-
-	// 		} else {
-	// 			_v_I_dot.setZero();
-	// 		}
-
-	// 		_v_I.setZero();
-	// 		_w_B.setZero();
-	// 		_grounded = true;
-
-	// 	} else if (_vehicle == VehicleType::FW) {
-	// 		if (!_grounded) {    // if we just hit the floor
-	// 			// for the accelerometer, compute the acceleration that will stop the vehicle in one time step
-	// 			_v_I_dot(2) = -_v_I(2) / _dt;
-
-	// 		} else {
-	// 			// we only allow negative acceleration in order to takeoff
-	// 			_v_I_dot(2) = fminf(_v_I_dot(2), 0.0f);
-	// 		}
-
-	// 		// integration: Euler forward
-	// 		_p_I = _p_I + _p_I_dot * _dt;
-	// 		_v_I = _v_I + _v_I_dot * _dt;
-	// 		Eulerf RPY = Eulerf(_q);
-	// 		RPY(0) = 0.0f;	// no roll
-	// 		RPY(1) = radians(0.0f); // pitch slightly up if needed to get some lift
-	// 		_q = Quatf(RPY);
-	// 		_w_B.setZero();
-	// 		_grounded = true;
-	// 	}
-
-	// } else {
-	// 	// integration: Euler forward
-	// 	_p_I = _p_I + _p_I_dot * _dt;
-	// 	_v_I = _v_I + _v_I_dot * _dt;
-	// 	_q = _q * _dq;
-	// 	_q.normalize();
-	// 	// integration Runge-Kutta 4
-	// 	// rk4_update(_p_I, _v_I, _q, _w_B);
-	// 	_w_B = constrain(_w_B + _w_B_dot * _dt, -6.0f * M_PI_F, 6.0f * M_PI_F);
-	// 	_grounded = false;
-	// }
-}
-
-// reconstruct the noisy sensor signals
-void Sxp::reconstruct_sensors_signals()
-{
-	// // The sensor signals reconstruction and noise levels are from [1]
-	// // [1] Bulka, Eitan, and Meyer Nahon. "Autonomous fixed-wing aerobatics: from theory to flight."
-	// //     In 2018 IEEE International Conference on Robotics and Automation (ICRA), pp. 6573-6580. IEEE, 2018.
-
-	// // IMU
-	// _acc = _C_IB.transpose() * (_v_I_dot - Vector3f(0.0f, 0.0f, CONSTANTS_ONE_G)) + noiseGauss3f(0.5f, 1.7f, 1.4f);
-	// _gyro = _w_B + noiseGauss3f(0.14f, 0.07f, 0.03f);
-	// _mag = _C_IB.transpose() * _mu_I + noiseGauss3f(0.02f, 0.02f, 0.03f);
-	// _mag(0) += _mag_offset_x;
-	// _mag(1) += _mag_offset_y;
-	// _mag(2) += _mag_offset_z;
-
-	// // barometer
-	// float altitude = (_H0 - _p_I(2)) + _baro_offset_m + generate_wgn() * 0.14f; // altitude with noise
-	// _baro_p_mBar = CONSTANTS_STD_PRESSURE_MBAR *        // reconstructed pressure in mBar
-	// 	       powf((1.0f + altitude * TEMP_GRADIENT / T1_K), -CONSTANTS_ONE_G / (TEMP_GRADIENT * CONSTANTS_AIR_GAS_CONST));
-	// _baro_temp_c = T1_K + CONSTANTS_ABSOLUTE_NULL_CELSIUS + TEMP_GRADIENT * altitude; // reconstructed temperture in celcius
-
-	// // GPS
-	// _gps_lat_noiseless = _LAT0 + degrees((double)_p_I(0) / CONSTANTS_RADIUS_OF_EARTH);
-	// _gps_lon_noiseless = _LON0 + degrees((double)_p_I(1) / CONSTANTS_RADIUS_OF_EARTH) / _COS_LAT0;
-	// _gps_alt_noiseless = _H0 - _p_I(2);
-
-	// _gps_lat = _gps_lat_noiseless + degrees((double)generate_wgn() * 0.2 / CONSTANTS_RADIUS_OF_EARTH);
-	// _gps_lon = _gps_lon_noiseless + degrees((double)generate_wgn() * 0.2 / CONSTANTS_RADIUS_OF_EARTH) / _COS_LAT0;
-	// _gps_alt = _gps_alt_noiseless + generate_wgn() * 0.5f;
-	// _gps_vel = _v_I + noiseGauss3f(0.06f, 0.077f, 0.158f);
-}
-
-// void Sxp::send_gps()
-// {
-	// _sensor_gps.timestamp = _now;
-	// _sensor_gps.lat = (int32_t)(_gps_lat * 1e7);       // Latitude in 1E-7 degrees
-	// _sensor_gps.lon = (int32_t)(_gps_lon * 1e7); // Longitude in 1E-7 degrees
-	// _sensor_gps.alt = (int32_t)(_gps_alt * 1000.0f); // Altitude in 1E-3 meters above MSL, (millimetres)
-	// _sensor_gps.alt_ellipsoid = (int32_t)(_gps_alt * 1000); // Altitude in 1E-3 meters bove Ellipsoid, (millimetres)
-	// _sensor_gps.vel_ned_valid = true;              // True if NED velocity is valid
-	// _sensor_gps.vel_m_s = sqrtf(_gps_vel(0) * _gps_vel(0) + _gps_vel(1) * _gps_vel(
-	// 				    1)); // GPS ground speed, (metres/sec)
-	// _sensor_gps.vel_n_m_s = _gps_vel(0);           // GPS North velocity, (metres/sec)
-	// _sensor_gps.vel_e_m_s = _gps_vel(1);           // GPS East velocity, (metres/sec)
-	// _sensor_gps.vel_d_m_s = _gps_vel(2);           // GPS Down velocity, (metres/sec)
-	// _sensor_gps.cog_rad = atan2(_gps_vel(1),
-	// 			    _gps_vel(0)); // Course over ground (NOT heading, but direction of movement), -PI..PI, (radians)
-
-	// if (_gps_used >= 4) {
-	// 	gps_fix();
-
-	// } else {
-	// 	gps_no_fix();
-	// }
-
-	// // device id
-	// device::Device::DeviceId device_id;
-	// device_id.devid_s.bus_type = device::Device::DeviceBusType::DeviceBusType_SIMULATION;
-	// device_id.devid_s.bus = 0;
-	// device_id.devid_s.address = 0;
-	// device_id.devid_s.devtype = DRV_GPS_DEVTYPE_SIM;
-	// _sensor_gps.device_id = device_id.devid;
-
-	// _sensor_gps_pub.publish(_sensor_gps);
-// }
-
-// void Sxp::send_airspeed()
-// {
-// 	airspeed_s airspeed{};
-// 	airspeed.timestamp_sample = _now;
-// 	airspeed.true_airspeed_m_s	= fmaxf(0.1f, _v_B(0) + generate_wgn() * 0.2f);
-// 	airspeed.indicated_airspeed_m_s = airspeed.true_airspeed_m_s * sqrtf(_wing_l.get_rho() / RHO);
-// 	airspeed.air_temperature_celsius = _baro_temp_c;
-// 	airspeed.confidence = 0.7f;
-// 	airspeed.timestamp = hrt_absolute_time();
-// 	_airspeed_pub.publish(airspeed);
-// }
-
-// void Sxp::send_dist_snsr()
-// {
-// 	_distance_snsr.timestamp = _now;
-// 	_distance_snsr.type = distance_sensor_s::MAV_DISTANCE_SENSOR_LASER;
-// 	_distance_snsr.orientation = distance_sensor_s::ROTATION_DOWNWARD_FACING;
-// 	_distance_snsr.min_distance = _distance_snsr_min;
-// 	_distance_snsr.max_distance = _distance_snsr_max;
-// 	_distance_snsr.signal_quality = -1;
-// 	_distance_snsr.device_id = 0;
-
-// 	if (_distance_snsr_override >= 0.f) {
-// 		_distance_snsr.current_distance = _distance_snsr_override;
-
-// 	} else {
-// 		_distance_snsr.current_distance = -_p_I(2) / _C_IB(2, 2);
-
-// 		if (_distance_snsr.current_distance > _distance_snsr_max) {
-// 			// this is based on lightware lw20 behaviour
-// 			_distance_snsr.current_distance = UINT16_MAX / 100.f;
-
-// 		}
-// 	}
-
-// 	_distance_snsr_pub.publish(_distance_snsr);
-// }
-
 void Sxp::publish_sxp()
 {
-	_now = hrt_absolute_time();
-	_dt = (_now - _last_run) * 1e-6f;
-	if (_dt < 1.0e-5f) {
-		return;
-	}
-	_last_run = _now;
-
 	// [Lat, Lon, Alt, Pitch, Roll, Yaw, Gear]
 	_getPOSIres = getPOSI(_xpc_sock, _v_states, 0);
+	if (_getPOSIres==0) {
+		_now = hrt_absolute_time();
+		_dt = (_now - _last_run) * 1e-6f;
+		if (_dt < 1.0e-5f) {
+			return;
+		}
+		_last_run = _now;
 
-	// publish attitude
-	_att.timestamp = hrt_absolute_time();
-	_rpy = matrix::Eulerf(radians(_v_states[4]), radians(_v_states[3]), radians(_v_states[5]));
-	Quatf q = matrix::Quatf(_rpy);
-	q.copyTo(_att.q);
-	_att_pub.publish(_att);
+		// publish attitude
+		_att.timestamp = hrt_absolute_time();
+		_rpy = matrix::Eulerf(radians(_v_states[4]), radians(_v_states[3]), radians(_v_states[5]));
+		Quatf q = matrix::Quatf(_rpy);
+		q.copyTo(_att.q);
+		_att_pub.publish(_att);
 
-	// compute the angular rates
-	Eulerf _rpy_dot = (_rpy - _rpy_old) / _dt;
-	_rpy_old = _rpy;
-	float S_[3][3] = {
-		{1, 0, -sinf(_rpy.theta())},
-		{0, cosf(_rpy.phi()), sinf(_rpy.phi())*cosf(_rpy.theta())},
-		{0, -sinf(_rpy.phi()), cosf(_rpy.phi())*cosf(_rpy.theta())}
-	};
-	Matrix3f S = Matrix3f(S_);
-	_w_B = S*_rpy_dot;	// correct transformation
+		// compute the angular rates
+		Eulerf _rpy_dot = (_rpy - _rpy_old) / _dt;
+		_rpy_old = _rpy;
+		float S_[3][3] = {
+			{1, 0, -sinf(_rpy.theta())},
+			{0, cosf(_rpy.phi()), sinf(_rpy.phi())*cosf(_rpy.theta())},
+			{0, -sinf(_rpy.phi()), cosf(_rpy.phi())*cosf(_rpy.theta())}
+		};
+		Matrix3f S = Matrix3f(S_);
+		_w_B = S*_rpy_dot;	// correct transformation
 
-	// publish angular velocity groundtruth
-	_vehicle_angular_velocity.timestamp = hrt_absolute_time();
-	_vehicle_angular_velocity.xyz[0] = _w_B(0); // rollspeed;
-	_vehicle_angular_velocity.xyz[1] = _w_B(1); // pitchspeed;
-	_vehicle_angular_velocity.xyz[2] = _w_B(2); // yawspeed;
-	_vehicle_angular_velocity_pub.publish(_vehicle_angular_velocity);
+		// publish angular velocity groundtruth
+		_vehicle_angular_velocity.timestamp = hrt_absolute_time();
+		_vehicle_angular_velocity.xyz[0] = _w_B(0); // rollspeed;
+		_vehicle_angular_velocity.xyz[1] = _w_B(1); // pitchspeed;
+		_vehicle_angular_velocity.xyz[2] = _w_B(2); // yawspeed;
+		_vehicle_angular_velocity_pub.publish(_vehicle_angular_velocity);
 
-	// publish the global position
-	_gpos.timestamp = hrt_absolute_time();
-	_gpos.lat = _v_states[0];
-	_gpos.lon = _v_states[1];
-	_gpos.alt = (float)_v_states[2];
-	_gpos_pub.publish(_gpos);
+		// publish the global position
+		_gpos.timestamp = hrt_absolute_time();
+		_gpos.lat = _v_states[0];
+		_gpos.lon = _v_states[1];
+		_gpos.alt = (float)_v_states[2];
+		_gpos_pub.publish(_gpos);
 
-	// publish simulated estimator status
-	_estim_s.timestamp_sample = hrt_absolute_time();
-	_estim_s.timestamp = hrt_absolute_time();
-	_estim_s.output_tracking_error[0]=0.0019f;
-	_estim_s.output_tracking_error[1]=0.0106f;
-	_estim_s.output_tracking_error[2]=0.0229f;
-	_estim_s.control_mode_flags = 2147484183;
-	_estim_s.pos_horiz_accuracy = 0.2048f;
-	_estim_s.pos_vert_accuracy = 0.3553f;
-	_estim_s.mag_test_ratio = 0.2860f;
-	_estim_s.vel_test_ratio = 0.0338f;
-	_estim_s.pos_test_ratio = 0.0644f;
-	_estim_s.hgt_test_ratio = 0.0059f;
-	_estim_s.accel_device_id = 1310988;
-	_estim_s.gyro_device_id = 1310988;
-	_estim_s.baro_device_id = 6620172;
-	_estim_s.mag_device_id = 197388;
-	_estim_s.solution_status_flags = 895;
-	_estim_s_pub.publish(_estim_s);
+		// publish simulated estimator status
+		_estim_s.timestamp_sample = hrt_absolute_time();
+		_estim_s.timestamp = hrt_absolute_time();
+		_estim_s.output_tracking_error[0]=0.0019f;
+		_estim_s.output_tracking_error[1]=0.0106f;
+		_estim_s.output_tracking_error[2]=0.0229f;
+		_estim_s.control_mode_flags = 2147484183;
+		_estim_s.pos_horiz_accuracy = 0.2048f;
+		_estim_s.pos_vert_accuracy = 0.3553f;
+		_estim_s.mag_test_ratio = 0.2860f;
+		_estim_s.vel_test_ratio = 0.0338f;
+		_estim_s.pos_test_ratio = 0.0644f;
+		_estim_s.hgt_test_ratio = 0.0059f;
+		_estim_s.accel_device_id = 1310988;
+		_estim_s.gyro_device_id = 1310988;
+		_estim_s.baro_device_id = 6620172;
+		_estim_s.mag_device_id = 197388;
+		_estim_s.solution_status_flags = 895;
+		_estim_s_pub.publish(_estim_s);
 
-	// publish random sensor value so the commander passes the check
-	_px4_accel.update(_now, 0, 0, 9.81f);
-	_px4_gyro.update(_now, _w_B(0), _w_B(1), _w_B(2));
-	// _px4_mag.update(_now, 0, 0, 0);
-	// sensor_baro_s sensor_baro{};
-	// sensor_baro.timestamp_sample = _now;
-	// sensor_baro.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
-	// sensor_baro.timestamp = _now;
-	// _sensor_baro_pub.publish(sensor_baro);
+		// publish random sensor value so the commander passes the check
+		_px4_accel.update(_now, 0, 0, 9.81f);
+		_px4_gyro.update(_now, _w_B(0), _w_B(1), _w_B(2));
+		// _px4_mag.update(_now, 0, 0, 0);
+		// sensor_baro_s sensor_baro{};
+		// sensor_baro.timestamp_sample = _now;
+		// sensor_baro.device_id = 6620172; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
+		// sensor_baro.timestamp = _now;
+		// _sensor_baro_pub.publish(sensor_baro);
+	} else if (_getPOSIres==-3) {
+		_xpc_length_error_count++;
+	}
+	_total_loops++;
 }
 
 
@@ -438,7 +274,9 @@ int Sxp::print_status()
 	// PX4_INFO("vehicle landed: %d", _grounded);
 	PX4_INFO("dt [us]: %d", (int)(_dt * 1e6f));
 	PX4_INFO("xpc socket.port: %d, xpc socket.xpPort: %d, xpc socket.sock: %d", (int)_xpc_sock.port, (int)_xpc_sock.xpPort, _xpc_sock.sock);
-	PX4_INFO("send control res: %d, get posi res: %d", _sendCTRLres, _getPOSIres);
+	PX4_INFO("last send control res: %d, last get posi res: %d", _sendCTRLres, _getPOSIres);
+	PX4_INFO("length error count: %u, %%: %.2f", _xpc_length_error_count, ((double)_xpc_length_error_count)*100/_total_loops);
+
 	PX4_INFO("inertial position NED (m)");
 	_p_I.print();
 	PX4_INFO("inertial velocity NED (m/s)");

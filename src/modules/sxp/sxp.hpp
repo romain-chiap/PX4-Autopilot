@@ -129,6 +129,8 @@ private:
 	double _v_states[7]={};
 	matrix::Eulerf _rpy = {};
 	matrix::Eulerf _rpy_old = {};
+	uint32_t _xpc_length_error_count=0;
+	uint32_t _total_loops=0;
 
 	void parameters_updated();
 
@@ -165,12 +167,9 @@ private:
 
 	void init_variables();
 	void read_motors();
-	void generate_force_and_torques();
-	void equations_of_motion();
-	void reconstruct_sensors_signals();
-	void send_gps();
-	void send_airspeed();
-	void send_dist_snsr();
+	// void send_gps();
+	// void send_airspeed();
+	// void send_dist_snsr();
 	void publish_sxp();
 
 	void realtime_loop();

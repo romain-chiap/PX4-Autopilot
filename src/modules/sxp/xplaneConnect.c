@@ -586,7 +586,7 @@ int getPOSI(XPCSocket sock, double values[7], char ac)
 	}
 	else
 	{
-		printError("getPOSI", "Unexpected response length.");
+		// printError("getPOSI", "Unexpected response length.");
 		return -3;
 	}
 	return 0;
