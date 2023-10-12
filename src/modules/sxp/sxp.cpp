@@ -214,8 +214,8 @@ void Sxp::read_motors()
 	if (_armed) {
 		command[0] = -_u[1];	// elevator
 		command[1] = _u[0];	// ailerons
-		// command[2] = _u[2]+_u[6];	// we mix the wheel in there
-		command[2] = _u[2];	// rudder
+		command[2] = _u[2]+_u[6];	// we mix the wheel in there
+		// command[2] = _u[2];	// rudder
 		command[3] = _u[3];	// throttle
 		command[5] = _u[4];	// flaps
 	}
