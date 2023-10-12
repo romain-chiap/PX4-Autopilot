@@ -228,8 +228,8 @@ elif [ "$program" == "sihsim" ] && [ ! -n "$no_sim" ]; then
 	fi
 elif [ "$program" == "sxpsim" ] && [ ! -n "$no_sim" ]; then
 	export SIM_MODE="sxpsim"
-	if [ "$model" != "cessna" ]; then
-		echo "Model ${model} not compatible with with sxp. sxp supports [cessna]."
+	if [ "$model" != "cessna" ] && [ "$model" != "cirrus" ]; then
+		echo "Model ${model} not compatible with with sxp. sxp supports [cessna,cirrus]."
 		exit 1
 	fi
 fi

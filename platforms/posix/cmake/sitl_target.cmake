@@ -392,6 +392,7 @@ endforeach()
 set(models_sxp
 	none
 	cessna
+	cirrus
 )
 
 set(worlds_sxp
