@@ -75,7 +75,7 @@
 #include <uORB/topics/vehicle_global_position.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/estimator_status.h>
-#include <uORB/topics/airspeed.h>
+#include <uORB/topics/airspeed_validated.h>
 #include <uORB/topics/sensor_gps.h>
 #include <uORB/topics/sensor_baro.h>
 #include <lib/drivers/accelerometer/PX4Accelerometer.hpp>
@@ -156,8 +156,8 @@ private:
 	uORB::PublicationMulti<sensor_baro_s> 		_sensor_baro_pub{ORB_ID(sensor_baro)};
 
 	// airspeed
-	airspeed_s 					_airspeed{};
-	uORB::Publication<airspeed_s>			_airspeed_pub{ORB_ID(airspeed)};
+	airspeed_validated_s				_airspeed_v{};
+	uORB::Publication<airspeed_validated_s> 	_airspeed_validated_pub{ORB_ID(airspeed_validated)};
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 	uORB::Subscription _actuator_out_sub{ORB_ID(actuator_outputs)};

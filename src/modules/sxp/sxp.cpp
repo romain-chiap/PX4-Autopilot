@@ -368,12 +368,13 @@ void Sxp::publish_sxp()
 		// // }
 		// _true_airspeed = _indicated_airspeed * 1;
 
-		_airspeed.timestamp = _now;
-		_airspeed.timestamp_sample = _now;
-		_airspeed.indicated_airspeed_m_s = _vel_I.norm();
-		_airspeed.true_airspeed_m_s = _vel_I.norm();
-		_airspeed.air_temperature_celsius = baro_temp_c;
-		_airspeed_pub.publish(_airspeed);
+		_airspeed_v.timestamp = _now;
+		_airspeed_v.indicated_airspeed_m_s = _vel_I.norm();
+		_airspeed_v.true_airspeed_m_s = _vel_I.norm();
+		_airspeed_v.calibrated_airspeed_m_s = _vel_I.norm();
+		_airspeed_v.airspeed_sensor_measurement_valid = true;
+		_airspeed_validated_pub.publish(_airspeed_v);
+
 
 	} else if (_getPOSIres==-3) {
 		_xpc_length_error_count++;
