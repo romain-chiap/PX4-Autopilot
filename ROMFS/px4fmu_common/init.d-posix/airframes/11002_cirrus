@@ -41,7 +41,7 @@ param set-default FW_AIRSPD_STALL 35
 param set-default FW_AIRSPD_TRIM 60
 param set-default FW_T_SINK_R_SP 5
 param set-default FW_T_CLMB_R_SP 5
-param set-default FW_T_SPDWEIGHT 1.0
+param set-default FW_T_SPDWEIGHT 0.5
 
 param set-default SDLOG_MODE 1
 param set-default BAT_N_CELLS 3
