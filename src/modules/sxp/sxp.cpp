@@ -217,6 +217,7 @@ void Sxp::read_motors()
 		command[2] = _u[2]+_u[6];	// we mix the wheel in there
 		// command[2] = _u[2];	// rudder
 		command[3] = _u[3];	// throttle
+		command[4] = ceilf(_u[4]);	// gear open at the same time as the flaps
 		command[5] = _u[4];	// flaps
 	}
 	int size = 6;

@@ -29,7 +29,7 @@ param set-default FW_L1_DAMPING 0.85
 param set-default FW_T_I_GAIN_PIT 0.03
 param set-default FW_PR_P 0.12
 param set-default FW_PR_I 0.15
-param set-default FW_FLAPS_LND_SCL 0.5
+param set-default FW_FLAPS_LND_SCL 0.1
 param set-default FW_W_EN 1
 # time constant to filter the velocity differentiated from the position
 param set-default SXP_TAU_VEL 0.4
@@ -38,6 +38,8 @@ param set-default FW_AIRSPD_MIN 25
 param set-default FW_AIRSPD_MAX 65
 param set-default FW_AIRSPD_STALL 20
 param set-default FW_AIRSPD_TRIM 55
+param set-default FW_T_SINK_R_SP 5
+param set-default FW_T_CLMB_R_SP 5
 
 param set-default SDLOG_MODE 1
 
@@ -46,4 +48,4 @@ param set-default FW_T_SPDWEIGHT 0.5
 param set-default BAT_N_CELLS 3
 param set-default FW_LND_ANG 1
 
-param set RWTO_TKOFF 1  # enable takeoff from runway (as opposed to launched)
+param set-default RWTO_TKOFF 1  # enable takeoff from runway (as opposed to launched)
