@@ -152,9 +152,6 @@ public:
 	/** @see ModuleBase */
 	static int print_usage(const char *reason = nullptr);
 
-	/** @see ModuleBase::print_status() */
-	int print_status() override;
-
 	bool init();
 
 private:
@@ -265,7 +262,6 @@ private:
 	hrt_abstime _launch_detection_notify{0};
 
 	RunwayTakeoff _runway_takeoff;
-	int _achieved_debug_value=0;
 
 	// true if the last iteration was in manual mode (used to determine when a reset is needed)
 	bool _last_manual{false};

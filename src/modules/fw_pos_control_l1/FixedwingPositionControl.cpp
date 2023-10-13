@@ -1427,7 +1427,6 @@ FixedwingPositionControl::control_auto_takeoff(const hrt_abstime &now, const flo
 		if (!_runway_takeoff.isInitialized()) {
 			_runway_takeoff.init(now, _yaw, _current_latitude, _current_longitude);
 
-			_achieved_debug_value = 2;
 			/* need this already before takeoff is detected
 			 * doesn't matter if it gets reset when takeoff is detected eventually */
 			_takeoff_ground_alt = _current_altitude;
@@ -2716,16 +2715,6 @@ void FixedwingPositionControl::publishOrbitStatus(const position_setpoint_s pos_
 	orbit_status.z = pos_sp.alt;
 	orbit_status.yaw_behaviour = orbit_status_s::ORBIT_YAW_BEHAVIOUR_HOLD_FRONT_TANGENT_TO_CIRCLE;
 	_orbit_status_pub.publish(orbit_status);
-}
-
-int FixedwingPositionControl::print_status()
-{
-	PX4_INFO("Achieved debug value: %d", _achieved_debug_value);
-	PX4_INFO("Runway takeoff state: %d", _runway_takeoff.getState());
-	PX4_INFO("airspeed: %.2f", (double)_airspeed);
-
-
-	return 0;
 }
 
 int FixedwingPositionControl::task_spawn(int argc, char *argv[])
