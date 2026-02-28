@@ -337,3 +337,13 @@ PARAM_DEFINE_FLOAT(SIH_T_TAU, 0.05f);
  * @group Simulation In Hardware
  */
 PARAM_DEFINE_INT32(SIH_VEHICLE_TYPE, 0);
+
+/**
+ * North wall distance in meters
+ *
+ * Infinite wall streching from east to west, located at a distance D from takeoff location
+ *
+ * @unit m
+ * @group Simulation In Hardware
+ */
+PARAM_DEFINE_FLOAT(SIH_N_WALL_D, 10.0f);

@@ -295,7 +295,21 @@ void Sih::init_variables()
 	_q_E = Quatf(Eulerf(0.f, -M_PI_2_F, 0.f));
 	_w_B = Vector3f(0.0f, 0.0f, 0.0f);
 
-	_u[0] = _u[1] = _u[2] = _u[3] = 0.0f;
+	for (size_t i = 0; i < NUM_ACTUATORS_MAX; i++) {
+		_u[i] = 0.0f;
+	}
+
+	// populate obstacle map members
+	_obstacle_distance.frame = obstacle_distance_s::MAV_FRAME_BODY_FRD;
+	_obstacle_distance.sensor_type = obstacle_distance_s::MAV_DISTANCE_SENSOR_LASER;
+	_obstacle_distance.increment = 5;
+	_obstacle_distance.min_distance = 20;
+	_obstacle_distance.max_distance = 5000;
+	_obstacle_distance.angle_offset = -2.5f;
+
+	for (uint32_t i = 0 ; i < BIN_COUNT; i++) {
+		_obstacle_distance.distances[i] = UINT16_MAX;
+	}
 }
 
 void Sih::read_motors(const float dt)
@@ -597,6 +611,36 @@ void Sih::send_dist_snsr(const hrt_abstime &time_now_us)
 
 	distance_sensor.timestamp = hrt_absolute_time();
 	_distance_snsr_pub.publish(distance_sensor);
+
+
+	// publish the rotating obstacle distance sensor
+	static uint16_t bin_index = 0;
+	_obstacle_distance.distances[bin_index] = UINT16_MAX;	// invalid data
+
+
+	_obstacle_distance.distances[bin_index] = 1000 + 20*bin_index;	// spiral test
+
+	// infinite wall streching from east to west, located at a distance d0 north of the local origin
+	float d0 = _sih_north_wall_dist.get();
+	if (d0 > 0.0f) {
+		float delta = d0 - _lpos(0);	// distance drone-wall along north axis
+		float beta = (bin_index*2*M_PI_F) / ((float)BIN_COUNT);	// angle of the sensor
+		float psi = Eulerf(_q).psi();			// yaw angle
+		float d1 = delta / cosf(wrap_pi(beta+psi));
+		if (PX4_ISFINITE(d1) && d1 > 0.0f) {
+			uint16_t dist_cm = (uint16_t)roundf(d1*100.0f);
+			dist_cm = min<uint16_t>(dist_cm,_obstacle_distance.max_distance + 1);
+			_obstacle_distance.distances[bin_index] = dist_cm;
+		} else {
+			_obstacle_distance.distances[bin_index] = _obstacle_distance.max_distance + 1; // no obstacle detected
+		}
+	}
+
+	bin_index = (bin_index+1) % BIN_COUNT;	// increment the bin
+
+
+	_obstacle_distance.timestamp = hrt_absolute_time();
+	_obstacle_distance_pub.publish(_obstacle_distance);
 }
 
 void Sih::publish_ground_truth(const hrt_abstime &time_now_us)
